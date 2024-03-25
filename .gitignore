@@ -1,0 +1,12 @@
+*.txt
+
+# Pyinstaller creates these
+*.manifest
+*.spec
+
+venv/
+build/
+dist/
+.idea/
+Tests/
+__pycache__/

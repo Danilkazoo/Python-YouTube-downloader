@@ -225,7 +225,7 @@ class Main(Tk):
 		out_hover()
 		self.canvas_resize_logic()
 	
-	# Panels with progressbar
+	# Panels with progress bar
 	def create_progress_panel(self):
 		variant = self.settings.get('visual_theme')
 		number = self.downloaded_count + 1
@@ -842,7 +842,7 @@ class Main(Tk):
 		if self.settings['print']:
 			print(self.settings)
 	
-	# Add video stream to download to quene
+	# Add video stream to download to queue
 	def add_to_quene(self, download_stream=None, input_video=None, auto_try_download=True, this_playlist_path=None):
 		if download_stream is None:
 			download_stream = self.input_streams[self.understandable_streams.index(self.streams_var.get())]
@@ -921,6 +921,7 @@ class Main(Tk):
 			else:
 				quals.extend(("144p", "240p", "360p", "480p", "720p", "1080p", "1440p", "2160p"))
 			quality_combobox.configure(values=quals)
+			qual_var.set(quals[0])
 		
 		def download_all():
 			playlist = slowtube.get_playlist(url)
@@ -1025,7 +1026,7 @@ class Main(Tk):
 			                      font=("Comic Sans MS", 14), command=download, state="disabled")
 			download_btn.grid(row=1, column=0, padx=10, columnspan=2)
 			
-			def check_all():
+			def switch_all():
 				nonlocal check_state
 				for video, checkbtn in video_choices:
 					checkbtn.set(check_state)
@@ -1038,7 +1039,8 @@ class Main(Tk):
 			
 			check_state = True
 			check_all_btn = Button(playlist_form, bg=back_color, fg="#45C545",
-			                       text="Check all ON", font=("Comic Sans MS", 14), command=check_all, state="disabled")
+			                       text="Check all ON", font=("Comic Sans MS", 14), command=switch_all,
+			                       state="disabled")
 			check_all_btn.grid(row=1, column=2, padx=10)
 			
 			# Canvas for scrolling
@@ -1050,8 +1052,6 @@ class Main(Tk):
 			videos_canvas.pack(side=LEFT, fill=BOTH, expand=True)
 			
 			videos_scrollbar = Scrollbar(videos_canvas_frm, orient=VERTICAL, command=videos_canvas.yview)
-			videos_canvas.configure(yscrollcommand=videos_scrollbar.set)
-			
 			ignore_scrolling = False
 			
 			def on_mousewheel(event: Event):
@@ -1061,9 +1061,11 @@ class Main(Tk):
 				videos_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 			
 			playlist_form.bind("<MouseWheel>", on_mousewheel)
-			
 			videos_frm = Frame(videos_canvas, width=535)
 			videos_canvas.create_window((0, 0), window=videos_frm, anchor="nw")
+			videos_canvas.configure(yscrollcommand=videos_scrollbar.set)
+			
+			videos_frm.bind("<Configure>", lambda e: videos_canvas.configure(scrollregion=videos_canvas.bbox("all")))
 			
 			def playlist_canvas_logic():
 				videos_frm.configure(height=videos_frm.winfo_reqheight())
@@ -1083,11 +1085,11 @@ class Main(Tk):
 					w.configure(background=back_color)
 				frm.configure(background=back_color, highlightcolor=border_color)
 			
-			def checkbox_fg(*trash, checkbox: Checkbutton, checkvar: BooleanVar):
+			def check_fg(*trash, check_label: Label, checkvar: BooleanVar):
 				if checkvar.get():
-					checkbox.configure(fg="#45C545")
+					check_label.configure(fg="#45C545")
 				else:
-					checkbox.configure(fg='#C54545')
+					check_label.configure(fg='#C54545')
 			
 			for number, video in enumerate(videos, start=1):
 				video_len = seconds_to_time(video.length)
@@ -1148,8 +1150,7 @@ class Main(Tk):
 				
 				check_var = BooleanVar()
 				check_var.set(False)
-				check = Checkbutton(dis_video_frm, variable=check_var, fg=panel_text_color, bg=panel_back, text="✓",
-				                    font="Arial 16 bold")
+				check = Label(dis_video_frm, fg=panel_text_color, bg=panel_back, text="✓", font="Arial 24 bold")
 				check.grid(row=0, rowspan=2, column=2)
 				
 				dis_video_frm.bind('<Enter>', lambda event, pbg=panel_highlight_color, pbd=panel_highlight_border,
@@ -1159,8 +1160,8 @@ class Main(Tk):
 				                   lambda event, pbg=panel_back, pbd=panel_border, dvf=dis_video_frm, ch=check,
 				                          n=name_lbl, i=info_lbl: change_background(pbg, pbd, dvf, ch, n, i))
 				video_choices.append((video, check_var))
-				check_var.trace("w", lambda *x, c=check, cv=check_var: checkbox_fg(checkbox=c, checkvar=cv))
-				checkbox_fg(checkbox=check, checkvar=check_var)
+				check_var.trace("w", lambda *x, c=check, cv=check_var: check_fg(check_label=c, checkvar=cv))
+				check_fg(check_label=check, checkvar=check_var)
 				
 				preview = 0
 				if do_preview:
@@ -1173,9 +1174,9 @@ class Main(Tk):
 					playlist_form.update_idletasks()
 				
 				if do_preview:
-					parts = (dis_video_frm, name_lbl, info_lbl, im_references[-1])
+					parts = (dis_video_frm, name_lbl, info_lbl, im_references[-1], check)
 				else:
-					parts = (dis_video_frm, name_lbl, info_lbl)
+					parts = (dis_video_frm, name_lbl, info_lbl, check)
 				
 				def switch_checkbox(this_check):
 					this_check.set(not this_check.get())
@@ -1283,65 +1284,3 @@ if __name__ == "__main__":
 	
 	window.config(menu=minigames_menu)
 	window.mainloop()
-
-# TODO:
-#  1. Обход ограничения по возрасту или же галлюцинаций (pytube иногда выдаёт ошибку типа AgeRestriction когда всё норм)
-#  2. Вполне вероятен шанс, что прога будет ломаться при смене названий видео на тайтл
-#  3. Функиця которая проверяет совпадения музыки в плейлисте и выбранной папке (ну и по рекурсии, хрен ли нет)
-#  и, типа, подкрашивает плитки плейлиста красным если прям стопудово есть совпадение, жёлтым если может быть, и зеленым если всё норм
-#  Вопрос только в том как сделать эту проверку, и по каким критериям находить дубликаты ?
-#  Первая мысль - название, но даже тут всё не так просто, ведь они могут просто чуток отличаться, в OST плейлистах часто добавляют в название
-#  Vol 1. Ost 1 и так далее, что будет совпадением ? смотреть ли по этому в первую очередь, или же в первую очередь смотреть на процент совпадающих букв ?
-#  Вторая мысль - сравнивать длинну видео, тут проще, надо только помнить что некоторые треки добавляют в начало заставку, та и есть небольшой рандом на пару секунд
-#  И, в третьих, важно тогда подмечать всякие ремиксы и каверы, они - НЕ один трек, но вполне могут попасть под месиво
-#  Ну и сделать это желательно в мануальном выборе чо скачивать из плейлиста, например, после того как ты загрузил все видео будет появляться эта кнопка...
-#  Как только вводить ссылку на папку -_- (Ещё один вопрос - будет ли это жрать жизнь носителя, типа, чтение не запись, дааа ?)
-#  .
-#  5. Посчитать проценты кода чем заняты, лол, типа, ставлю что 50% это тупо ткинтер. Я прост хочу посмотреть насколько я его неэффективно писал - ОТКУДА 2к строк ?
-#  считать проценты можно как по функциям проги, так и просто по назначению строк - например, 20% кода это тупо скачка видео, 80% это настройка что скачивать
-#  ну и по строкам - 90% это ткинтер, 5% это настройка классов, 5% это функционал, лел
-#  .
-#  8. Ускорение проги через более крутецкий мультипоток ? По факту, скачка видео, и его переделка - ваще отдельные вещи, и, по факту, их можно запускать отдельно
-#  не говоря уже о том, что, в теории, я могу создавать сразу кучу тредов по переводу видео, и, тогда оно будет быстрее ? Вполне возможно так то
-#  проблемы могут быть канешн с тем что прога так то привыкла скачивать только одно видео за раз, це да, по факту не будет работать
-#  це кста в теории одна из тех вещей которые было бы гораздо проще сделать, если бы каждый объект видео (класс со всей инфой о видео, его плиткой и ваще всем,
-#  включая скачку и всё такое) - если бы у меня работало через них, то, возможно, я бы реально мог такое сделать, лел
-#  9. Рандом мысль - я же и так превьюшки скачиваю, может тогда как-то их сувать и в сам mp3 файл ? типа, у них тоже бывают превьюшки, можт буит прикольно
-#  тогда надо прост проверить насколько это прикольно в уже скачанных файлах, и, сколько места это будет жрать
-#  10. Quick_select вроде и выбирает по качество, но по фпс ? проверь кидает ли оно фпс или реально выбирает чо нада
-#  11. У меня в программе не одна, а целых 2 бесполезные кнопки
-#  12. Когда в плейлисте ты меняешь тип скачки то должно меняться и качество, а оно меняется лишь в вариантах а не выборе
-
-#  13. При выборе видео в плейлисте можно добавить кнопку вырубить или врубить всё. Удобно когда выбираешь чо скачать среди музыки
-
-#  14. И возможно стоит сделать галочку больше или просто заметней, так не поймёшь прям с первого взгляда
-#  15. При копировании пути для скачки нельзя вставить на русском языке, либо фиксь это, либо добавь вставку через ПКМ
-#  16. Чат жпт охренительно понимает и оценивает твой код из гита, он нашёл то что у меня есть пару ошибочных названий - download_button, queue instead of quene
-#  17. Обновить readme, можт добавить надпись мол кидайте предложения и критику, я типа только начинающий.
-#  много повторения тех же настроек цветов, что можно переделать чтобы было легче менять (based)
-#  .
-#  Что он верно написал, но не проверил - треды, может быть разумней начинать новый тред когда начинаешь скачку видоса ? Ибо, после скачки начинается рекурсия и возможно
-#  будет умнее её обойти создавая новый тред при скачке
-#  .
-#  Ещё одна вещь что он предложил довольно умную - у меня куча твёрдых значений, я могу их где-то заранее сохранять в константу, так и понятней чо это за
-#  магические цифры, и легче будет их потом менять. (например, 73 в значении размера окна или чего там...)
-#  .
-#  Model-View-Controller - возможно и впрямь хорошая идея была бы юзнуть чота такое, потому что работать и с логикой, и с самим GUI одновременно - такое себе
-#  18. Эта вот проверка чо уже есть в плейлисте может помогать докачивать видео из плейлиста ? вот скачал я половину, вторую оставил на потом
-#  А потом вернулся к нему - надо докачать что выберу из второй половины. И, было бы удобно поставить проверку с одной папкой и проверить где я остановился
-#  хотя не, по факту ты остановишься там где плейлист прослушивал...
-#  19. Возможно стоит потом добавить языки, ибо, на гите ладно ещё инглиш, но це пример для русского маркета же
-"""Assessment:
-
-Positive Aspects: The project demonstrates an ability to integrate various libraries to build a functional application, an understanding of GUI development with
-tkinter, and threading for concurrency. These are valuable skills.
-
-Areas of Concern: As it stands, the lack of adherence to good practices such as clear code structuring, modularity, and
-PEP 8 compliance might be a red flag to potential reviewers. It shows a need for improvement in code quality and software design principles.
-Recommendations: Refactor the code with emphasis on modularity, readability, compliance with PEP 8, and add comprehensive documentation.
-Demonstrating the ability to write clean, maintainable, and efficient code is crucial for an entry-level programmer's portfolio.
-"""
-# Смишнявыйц дебаг - типа, если ошибка вылетит, то в ткинтердобавится фрейм, который пишет как сообщениями типа "ща, ща,
-# ща смишнявка будит, щаща погоди, щааааас будет", пишет как сообщениями, по паре слов, вот, и, баги тоже типа пишутся
-# построчно но для комедии я могу первые пару строк писать с задержкой мол в секунду, а остальные 500 строк ошибки можно
-# выводить быстро, чтобы экран ломался

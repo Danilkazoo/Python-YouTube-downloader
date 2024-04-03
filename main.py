@@ -29,8 +29,8 @@ class Main(Tk):
 		
 		self.images = []
 		self.playlist_images = []
-		self.download_quene = deque()
-		self.quene_panels = deque()
+		self.download_queue = deque()
+		self.queue_panels = deque()
 		self.downloading_now = False
 		
 		self.init_settings()
@@ -98,7 +98,7 @@ class Main(Tk):
 		                                  font=self.main_font, textvariable=self.streams_var)
 		self.stream_choice.grid(row=1, column=4)
 		
-		self.donwload_button = Button(df, text="Donwload", font=self.main_font, command=self.add_to_quene,
+		self.donwload_button = Button(df, text="Donwload", font=self.main_font, command=self.add_to_queue,
 		                              height=2,
 		                              bg=back_color, fg=text_color, relief='solid')
 		self.donwload_button.grid(row=1, column=5, padx=(20, 10))
@@ -109,6 +109,7 @@ class Main(Tk):
 		else:
 			for widget in (self.extension_combo, self.stream_choice):
 				widget.configure(state='readonly', background=back_color, foreground=text_color)
+			self.extension_var.set(self.settings.get("quick_type"))
 		
 		# Just adds glow when hovering
 		for widget in (self.url_ins_btn, self.en_url, self.donwload_button):
@@ -139,8 +140,8 @@ class Main(Tk):
 		
 		return df
 	
-	# Gray panels for videos in quene
-	def create_quene_panel(self, name, audio, extension, this_video, this_stream, playlist_name, ext_type):
+	# Gray panels for videos in queue
+	def create_queue_panel(self, name, audio, extension, this_video, this_stream, playlist_name, ext_type):
 		def on_hover(*trash):
 			hide_show(rem_btn, show=True)
 		
@@ -149,8 +150,8 @@ class Main(Tk):
 		
 		def del_this(frm, video_frm):
 			this_find = (this_video, this_stream, audio, extension, name, this_video_frame, playlist_name, ext_type)
-			self.quene_panels.remove(frm)
-			self.download_quene.remove(this_find)
+			self.queue_panels.remove(frm)
+			self.download_queue.remove(this_find)
 			video_frm.destroy()
 			self.canvas_resize_logic()
 		
@@ -164,30 +165,30 @@ class Main(Tk):
 		
 		this_video_frame = Frame(self.panels_frm, background="red", highlightthickness=0, height=73, borderwidth=0)
 		this_video_frame.pack(fill=X)
-		quene_frm = Frame(this_video_frame, background=back_color, highlightthickness=0, height=73, borderwidth=0)
-		quene_frm.pack(fill=X)
+		queue_frm = Frame(this_video_frame, background=back_color, highlightthickness=0, height=73, borderwidth=0)
+		queue_frm.pack(fill=X)
 		
-		Label(quene_frm, text=name, font=("Comic Sans MS", 16, 'bold'), fg=text_color,
+		Label(queue_frm, text=name, font=("Comic Sans MS", 16, 'bold'), fg=text_color,
 		      bg=back_color, justify="left").grid(row=0, column=0, columnspan=4)
-		Label(quene_frm, text=extension, font=("Comic Sans MS", 14, 'bold'), fg=text_color, bg=back_color,
+		Label(queue_frm, text=extension, font=("Comic Sans MS", 14, 'bold'), fg=text_color, bg=back_color,
 		      justify='left').grid(row=1, column=0, columnspan=4)
 		if audio:
-			Label(quene_frm, text="(no audio)", font=("Comic Sans MS", 14, 'bold'), fg=text_color, bg=back_color,
+			Label(queue_frm, text="(no audio)", font=("Comic Sans MS", 14, 'bold'), fg=text_color, bg=back_color,
 			      justify='right').grid(row=1, column=1)
 		
-		rem_btn = Button(quene_frm, text="X", font="Arial 20 bold",
-		                 command=lambda: del_this(quene_frm, this_video_frame), fg=text_color,
+		rem_btn = Button(queue_frm, text="X", font="Arial 20 bold",
+		                 command=lambda: del_this(queue_frm, this_video_frame), fg=text_color,
 		                 bg=back_color, relief="flat")
 		rem_btn.grid(row=0, column=2, rowspan=2)
 		rem_btn.bind("<Enter>", lambda _, w=rem_btn: btn_glow(widget=w, enter=True, glow_color="#777777"))
 		rem_btn.bind("<Leave>", lambda _, w=rem_btn: btn_glow(widget=w, enter=False, back_color=back_color))
-		quene_frm.grid_columnconfigure(1, weight=1)
+		queue_frm.grid_columnconfigure(1, weight=1)
 		out_hover()
-		quene_frm.bind('<Enter>', on_hover)
-		quene_frm.bind('<Leave>', out_hover)
-		quene_frm.grid_propagate(False)
+		queue_frm.bind('<Enter>', on_hover)
+		queue_frm.bind('<Leave>', out_hover)
+		queue_frm.grid_propagate(False)
 		self.canvas_resize_logic()
-		return quene_frm, this_video_frame
+		return queue_frm, this_video_frame
 	
 	# Panels for errors
 	def create_error_panel(self, url, error):
@@ -555,7 +556,7 @@ class Main(Tk):
 			if self.settings.get("print"):
 				print("\nSelected stream:", selected_stream)
 			
-			self.add_to_quene(download_stream=selected_stream)
+			self.add_to_queue(download_stream=selected_stream)
 	
 	def download_selected(self, stream):
 		video_name = self.video_name
@@ -871,7 +872,7 @@ class Main(Tk):
 			print(self.settings)
 	
 	# Add video stream to download to queue
-	def add_to_quene(self, download_stream=None, input_video=None, auto_try_download=True, this_playlist_path=None):
+	def add_to_queue(self, download_stream=None, input_video=None, auto_try_download=True, this_playlist_path=None):
 		if download_stream is None:
 			download_stream = self.input_streams[self.understandable_streams.index(self.streams_var.get())]
 		if input_video is None:
@@ -885,11 +886,11 @@ class Main(Tk):
 			print(f'Title: {input_video.title}')
 			print(f'Real Title: {video_name}')
 		
-		panel, this_video_frame = self.create_quene_panel(video_name, self.settings["this_audio"],
+		panel, this_video_frame = self.create_queue_panel(video_name, self.settings["this_audio"],
 		                                                  self.settings["this_extension"], input_video, download_stream,
 		                                                  this_playlist_path, self.settings.get("full_extension"))
-		self.quene_panels.append(panel)
-		self.download_quene.append((input_video, download_stream, self.settings["this_audio"],
+		self.queue_panels.append(panel)
+		self.download_queue.append((input_video, download_stream, self.settings["this_audio"],
 		                            self.settings["this_extension"], video_name, this_video_frame, this_playlist_path,
 		                            self.settings.get("full_extension")))
 		self.download_frame.update()
@@ -899,14 +900,14 @@ class Main(Tk):
 			download_thread.start()
 	
 	def download_next(self):
-		if self.downloading_now or not self.download_quene:
+		if self.downloading_now or not self.download_queue:
 			return
 		
-		quene_panel = self.quene_panels.popleft()
-		quene_panel.destroy()
-		del quene_panel
+		queue_panel = self.queue_panels.popleft()
+		queue_panel.destroy()
+		del queue_panel
 		
-		video, download_stream, audio, extension, video_name, video_frame, playlist_name, real_ext = self.download_quene.popleft()
+		video, download_stream, audio, extension, video_name, video_frame, playlist_name, real_ext = self.download_queue.popleft()
 		self.settings["noaudio"] = audio
 		self.settings["extension"] = extension
 		self.video = video
@@ -976,7 +977,7 @@ class Main(Tk):
 			for video in playlist.videos_generator():
 				input_streams = slowtube.filter_streams(video.streams, self.settings)
 				selected_stream = slowtube.quick_select(input_streams, self.settings)
-				self.add_to_quene(download_stream=selected_stream, input_video=video,
+				self.add_to_queue(download_stream=selected_stream, input_video=video,
 				                  this_playlist_path=new_playlist_path)
 			# Should I add delay not to spam to youtube ? neva wanna look like a bot lol
 			
@@ -1000,7 +1001,7 @@ class Main(Tk):
 			input_streams = slowtube.filter_streams(video.streams, self.settings)
 			selected_stream = slowtube.quick_select(input_streams, self.settings)
 			self.input_video = video
-			self.add_to_quene(download_stream=selected_stream)
+			self.add_to_queue(download_stream=selected_stream)
 			
 			playlist_form.destroy()
 			self.extension_var.set(real_extension_var)
@@ -1032,7 +1033,7 @@ class Main(Tk):
 					if do_download.get():
 						input_streams = slowtube.filter_streams(video.streams, self.settings)
 						selected_stream = slowtube.quick_select(input_streams, self.settings)
-						self.add_to_quene(download_stream=selected_stream, input_video=video,
+						self.add_to_queue(download_stream=selected_stream, input_video=video,
 						                  this_playlist_path=new_playlist_path)
 				
 				self.playlist_images.clear()
@@ -1303,12 +1304,10 @@ class Main(Tk):
 
 if __name__ == "__main__":
 	window = Main()
-	window.title("Прогагага")
+	window.title("Python Youtube downloader")
 	
 	minigames_menu = Menu(window)
-	minigames_menu.add_command(label="Download", command=...)
 	minigames_menu.add_command(label="Settings", command=window.settings_frame_gen)
-	minigames_menu.add_command(label="Бесполезная кнопка", command=...)
 	
 	window.config(menu=minigames_menu)
 	window.mainloop()

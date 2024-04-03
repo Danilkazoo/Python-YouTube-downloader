@@ -99,7 +99,5 @@ def rename(old, new):
 
 def input_clipboard(event, entry: Entry):
 	# Needed for pasting with Ctrl + V on non-english keyboard layouts
-	print(event)
 	if event.keysym == "??" and event.keycode == 86 and event.state == 4:  # Not sure if it will 100% work
-		print("ahaha")
 		entry.event_generate("<<Paste>>")

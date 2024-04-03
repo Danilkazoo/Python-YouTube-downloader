@@ -1,6 +1,6 @@
 import os
 import shutil
-from tkinter import Widget, Toplevel
+from tkinter import Widget, Toplevel, Entry
 
 
 def btn_glow(*trash, widget: Widget, enter: bool, back_color="#313131", glow_color="#414141"):
@@ -95,3 +95,11 @@ def rename(old, new):
 	
 	shutil.move(old, new)
 	return new
+
+
+def input_clipboard(event, entry: Entry):
+	# Needed for pasting with Ctrl + V on non-english keyboard layouts
+	print(event)
+	if event.keysym == "??" and event.keycode == 86 and event.state == 4:  # Not sure if it will 100% work
+		print("ahaha")
+		entry.event_generate("<<Paste>>")

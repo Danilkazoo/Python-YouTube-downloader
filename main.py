@@ -592,6 +592,10 @@ class Main(Tk):
 		def update(*trash):
 			if os.path.exists(save_path_var.get()):
 				self.settings['save_path'] = save_path_var.get()
+				save_path_en.configure(background=back_color)
+			else:
+				save_path_en.configure(background="#C54545")  # Highlights entry if input location is wrong
+			
 			self.settings['print'] = debug_var.get()
 			self.settings['visual_theme'] = theme_var.get()
 			self.settings['do_quick'] = fast_var.get()
@@ -688,6 +692,24 @@ class Main(Tk):
 			update()
 			settings_frame.destroy()
 		
+		def save_path_rmb_popup(event=None):
+			x, y = event.x_root, event.y_root
+			
+			try:
+				save_path_rmb_menu.tk_popup(x, y, 0)
+			finally:
+				save_path_rmb_menu.grab_release()
+		
+		def menu_path_insert():
+			print(1)
+			save_path_var.set("")
+			save_path_en.event_generate("<<Paste>>")
+		
+		def menu_path_copy():
+			print(2)
+			self.clipboard_clear()
+			self.clipboard_append(save_path_var.get())
+		
 		df_bg_col = "black"
 		back_color = "#313131"
 		text_color = "#E5E5E5"
@@ -715,6 +737,12 @@ class Main(Tk):
 		save_path_btn = Button(settings_frame, text='📁', background=back_color, foreground=text_color, font="Arial 18",
 		                       command=path_insert)
 		save_path_btn.grid(row=1, column=2)
+		save_path_en.bind("<Key>", lambda x: input_clipboard(x, entry=save_path_en))
+		
+		save_path_rmb_menu = Menu(settings_frame, tearoff=0, font=("Comic Sans MS", 12))
+		save_path_rmb_menu.add_command(label='Insert', command=menu_path_insert)
+		save_path_rmb_menu.add_command(label='Copy', command=menu_path_copy)
+		save_path_en.bind("<Button-3>", save_path_rmb_popup)
 		
 		choose_title_var = BooleanVar()
 		choose_title_choice = Checkbutton(settings_frame,

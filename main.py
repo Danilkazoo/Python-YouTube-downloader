@@ -98,21 +98,21 @@ class Main(Tk):
 		                                  font=self.main_font, textvariable=self.streams_var)
 		self.stream_choice.grid(row=1, column=4)
 		
-		self.donwload_button = Button(df, text="Donwload", font=self.main_font, command=self.add_to_queue,
-		                              height=2,
-		                              bg=back_color, fg=text_color, relief='solid')
-		self.donwload_button.grid(row=1, column=5, padx=(20, 10))
+		self.download_button = Button(df, text="Donwload", font=self.main_font, command=self.add_to_queue,
+		                              height=2, bg=back_color, fg=text_color, relief='solid')
+		self.download_button.grid(row=1, column=5, padx=(20, 10))
 		
 		if self.settings['do_quick']:
-			for widget in (self.extension_combo, self.stream_choice):
+			for widget in (self.extension_combo, self.stream_choice, self.download_button):
 				widget.configure(state='disabled', background=df_bg_col, foreground='#C54545')
 		else:
 			for widget in (self.extension_combo, self.stream_choice):
 				widget.configure(state='readonly', background=back_color, foreground=text_color)
+			self.download_button.configure(state="normal", background=back_color, foreground=text_color)
 			self.extension_var.set(self.settings.get("quick_type"))
 		
 		# Just adds glow when hovering
-		for widget in (self.url_ins_btn, self.en_url, self.donwload_button):
+		for widget in (self.url_ins_btn, self.en_url, self.download_button):
 			widget.bind("<Enter>", lambda _, w=widget: btn_glow(widget=w, enter=True))
 			widget.bind("<Leave>", lambda _, w=widget: btn_glow(widget=w, enter=False))
 		
@@ -629,13 +629,14 @@ class Main(Tk):
 					boxcheck.configure(fg="#C54545")
 			
 			if self.settings['do_quick']:
-				for widget in (self.extension_combo, self.stream_choice):
+				for widget in (self.extension_combo, self.stream_choice, self.download_button):
 					widget.configure(state='disabled', background=df_bg_col, foreground='#C54545')
 				self.extension_var.set(self.settings.get('quick_type'))
 				self.streams_var.set(self.settings.get("quick_quality"))
 			else:
 				for widget in (self.extension_combo, self.stream_choice):
 					widget.configure(state='readonly', background=back_color, foreground=text_color)
+				self.download_button.configure(state='normal', background=back_color, foreground=text_color)
 			
 			if self.settings['print']:
 				print(self.settings)

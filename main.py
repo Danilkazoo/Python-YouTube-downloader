@@ -51,9 +51,10 @@ class Main(Tk):
 		if self.settings['do_quick']:
 			self.streams_var.set(self.settings.get("quick_quality"))
 	
+	# Main frame with all input widgets.
 	def download_frame_gen(self):
 		def new_thread_url_check(*trash):
-			url_check_thread = threading.Thread(target=self.check_url())
+			url_check_thread = threading.Thread(target=self.check_url)
 			url_check_thread.start()
 		
 		df_bg_col = "black"
@@ -291,7 +292,7 @@ class Main(Tk):
 		del self.progress_frm, self.canvas
 	
 	# Panels for downloaded video, with interactions
-	def create_downloaded_panel(self, download_location, downloaded_stream=None):
+	def create_downloaded_panel(self, download_location, downloaded_stream):
 		self.delete_progress_panel()
 		variant = self.settings.get('visual_theme')
 		self.downloaded_count += 1
@@ -299,6 +300,7 @@ class Main(Tk):
 		do_preview = self.settings.get("ender_wanna_destroiiii_da_interneeet")
 		video_name = self.video_name
 		this_url = self.video.watch_url
+		this_quality = slowtube.streams_to_human([downloaded_stream])[0]
 		
 		if variant == 1:
 			if number % 2 == 0:
@@ -351,7 +353,7 @@ class Main(Tk):
 			dis_video_frm.update_idletasks()
 		name_lbl.grid(column=2, row=0, sticky='we', columnspan=4)  # Name
 		
-		info_lbl = Label(dis_video_frm, text=f"{video_len}  -  {self.full_extension}  -  {file_size:.2f}Mb",
+		info_lbl = Label(dis_video_frm, text=f"{video_len}  -  {self.full_extension}  -  {this_quality}  -  {file_size:.2f}Mb",
 		                 font=("Comic Sans MS", 13, 'bold'), foreground=text_color, background=back_color)
 		info_lbl.grid(column=2, row=1, sticky="w", columnspan=20)  # Download info
 		
@@ -500,7 +502,9 @@ class Main(Tk):
 		self.download_frame.update()
 		self.canvas_resize_logic()
 		self.downloading_now = False
-		self.download_next()
+		
+		download_thread = threading.Thread(target=self.download_next)  # Added recently, should not break but IDK
+		download_thread.start()
 	
 	def check_url(self, *trash):
 		url = self.url_var.get()
@@ -525,7 +529,7 @@ class Main(Tk):
 			return
 		
 		if self.prev_url != url:
-			video, error = slowtube.get_video(url)
+			video, error = slowtube.get_video(url)  # TODO: Check why is this so slow, when you input it freezes HERE !?
 			if video is None:
 				if error is not None:
 					self.create_error_panel(url, error)
@@ -540,7 +544,6 @@ class Main(Tk):
 		if self.settings['do_quick'] is False:
 			if self.extension_var.get() is None:
 				return
-			
 			self.this_extension_type()
 			input_streams = slowtube.filter_streams(streams, self.settings)
 			self.understandable_streams = slowtube.streams_to_human(input_streams)
@@ -955,7 +958,7 @@ class Main(Tk):
 		
 		def download_all():
 			playlist = slowtube.get_playlist(url)
-			playlist_form.withdraw()
+			playlist_window.withdraw()
 			self.url_var.set('')
 			
 			real_extension_var = self.extension_var.get()
@@ -967,7 +970,7 @@ class Main(Tk):
 			self.extension_var.set(ext_var.get())
 			
 			self.this_extension_type()
-			playlist_form.destroy()
+			playlist_window.destroy()
 			
 			if self.settings.get("create_new_files"):
 				this_playlist_name = slowtube.sanitize_playlist_name(playlist.title)
@@ -987,7 +990,7 @@ class Main(Tk):
 			self.settings['quick_quality'] = real_qual
 		
 		def nah_download_one():
-			playlist_form.withdraw()
+			playlist_window.withdraw()
 			
 			real_extension_var = self.extension_var.get()
 			real_type = self.settings.get('quick_type')
@@ -1004,7 +1007,7 @@ class Main(Tk):
 			self.input_video = video
 			self.add_to_queue(download_stream=selected_stream)
 			
-			playlist_form.destroy()
+			playlist_window.destroy()
 			self.extension_var.set(real_extension_var)
 			self.settings['quick_type'] = real_type
 			self.settings['quick_quality'] = real_qual
@@ -1022,7 +1025,7 @@ class Main(Tk):
 				self.extension_var.set(ext_var.get())
 				
 				self.this_extension_type()
-				playlist_form.withdraw()
+				playlist_window.withdraw()
 				
 				if self.settings.get("create_new_files"):
 					this_playlist_name = slowtube.sanitize_playlist_name(playlist.title)
@@ -1038,20 +1041,27 @@ class Main(Tk):
 						                  this_playlist_path=new_playlist_path)
 				
 				self.playlist_images.clear()
-				playlist_form.destroy()
+				playlist_window.destroy()
 				
 				self.extension_var.set(real_extension_var)
 				self.settings['quick_type'] = real_type
 				self.settings['quick_quality'] = real_qual
 			
+			def onclose():
+				self.overrideredirect(False)
+				self.update()
+				playlist_window.destroy()
+			
+			self.overrideredirect(True)  # So windows sees only the playlist window
+			playlist_window.protocol("WM_DELETE_WINDOW", onclose)
+			
 			playlist = slowtube.get_playlist(url)
 			videos = playlist.videos
 			self.url_var.set('')
-			
 			one_video_btn.destroy()
 			all_videos_btn.destroy()
 			select_video_btn.destroy()
-			download_btn = Button(playlist_form, bg=back_color, fg=text_color,
+			download_btn = Button(playlist_window, bg=back_color, fg=text_color,
 			                      text="Download checked ones",
 			                      font=("Comic Sans MS", 14), command=download, state="disabled")
 			download_btn.grid(row=1, column=0, padx=10, columnspan=2)
@@ -1068,13 +1078,13 @@ class Main(Tk):
 					check_all_btn.configure(fg="#C54545", text="Check all OFF")
 			
 			check_state = True
-			check_all_btn = Button(playlist_form, bg=back_color, fg="#45C545",
+			check_all_btn = Button(playlist_window, bg=back_color, fg="#45C545",
 			                       text="Check all ON", font=("Comic Sans MS", 14), command=switch_all,
 			                       state="disabled")
 			check_all_btn.grid(row=1, column=2, padx=10)
 			
 			# Canvas for scrolling
-			videos_canvas_frm = Frame(playlist_form, background=back_color, relief='solid')
+			videos_canvas_frm = Frame(playlist_window, background=back_color, relief='solid')
 			videos_canvas_frm.grid(row=2, column=0, columnspan=5, pady=10, sticky="we")
 			
 			videos_canvas = Canvas(videos_canvas_frm, background=df_bg_col, relief='solid', highlightthickness=0,
@@ -1090,11 +1100,12 @@ class Main(Tk):
 					return
 				videos_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 			
-			playlist_form.bind("<MouseWheel>", on_mousewheel)
+			playlist_window.bind("<MouseWheel>", on_mousewheel)
 			videos_frm = Frame(videos_canvas, width=535)
 			videos_canvas.create_window((0, 0), window=videos_frm, anchor="nw")
 			videos_canvas.configure(yscrollcommand=videos_scrollbar.set)
 			
+			# This fixes the scroll into the void (not even I know what's in the void)
 			videos_frm.bind("<Configure>", lambda e: videos_canvas.configure(scrollregion=videos_canvas.bbox("all")))
 			
 			def playlist_canvas_logic():
@@ -1201,7 +1212,7 @@ class Main(Tk):
 				while name_lbl.winfo_reqwidth() > 450 - preview:
 					name_lbl.configure(font=("Comic Sans MS", i))
 					i -= 1
-					playlist_form.update_idletasks()
+					playlist_window.update_idletasks()
 				
 				if do_preview:
 					parts = (dis_video_frm, name_lbl, info_lbl, im_references[-1], check)
@@ -1214,7 +1225,7 @@ class Main(Tk):
 				for part in parts:
 					part.bind("<Button-1>", lambda *event, this_check=check_var: switch_checkbox(this_check))
 				
-				playlist_form.update()
+				playlist_window.update()
 				playlist_canvas_logic()
 			download_btn.configure(state="normal")
 			check_all_btn.configure(state="normal")
@@ -1231,12 +1242,12 @@ class Main(Tk):
 		back_color = "#313131"
 		text_color = "#E5E5E5"
 		
-		playlist_form = Toplevel(self, bg=df_bg_col, bd=0, padx=10, pady=10, width=535)
-		playlist_form.geometry(self.wm_geometry()[self.wm_geometry().index("+"):])
-		playlist_form.title("New video when 2.3 comes out")
+		playlist_window = Toplevel(self, bg=df_bg_col, bd=0, padx=10, pady=10, width=535)
+		playlist_window.geometry(self.wm_geometry()[self.wm_geometry().index("+"):])
+		playlist_window.title("New video when 2.3 comes out")
 		
 		if "watch" in url:  # This is a video from a playlist, I can download only it
-			one_video_btn = Button(playlist_form, bg=back_color, fg=text_color, text="Nah just one video\nBozo",
+			one_video_btn = Button(playlist_window, bg=back_color, fg=text_color, text="Nah just one video\nBozo",
 			                       font=("Comic Sans MS", 14), command=nah_download_one)
 			one_video_btn.grid(row=1, column=0, padx=10)
 			one_video_btn.bind("<Enter>", lambda _: btn_glow(widget=one_video_btn, enter=True))
@@ -1244,11 +1255,11 @@ class Main(Tk):
 		else:
 			one_video_btn = Button()
 		
-		all_videos_btn = Button(playlist_form, bg=back_color, fg=text_color, text="Download everything\ndaddy",
+		all_videos_btn = Button(playlist_window, bg=back_color, fg=text_color, text="Download everything\ndaddy",
 		                        font=("Comic Sans MS", 14), command=download_all_thread)
 		all_videos_btn.grid(row=1, column=1, padx=10)
 		
-		select_video_btn = Button(playlist_form, bg=back_color, fg=text_color, command=new_choose_thread,
+		select_video_btn = Button(playlist_window, bg=back_color, fg=text_color, command=new_choose_thread,
 		                          text="I alone can choose\nwhat to download", font=("Comic Sans MS", 14))
 		select_video_btn.grid(row=1, column=2, padx=10)
 		
@@ -1259,17 +1270,18 @@ class Main(Tk):
 		combostyle = ttk.Style()
 		combostyle.theme_use('combostyle')
 		
-		desc_lbl = Label(playlist_form, bg=df_bg_col, fg=text_color, text="Dis playlist?", font=("Comic Sans MS", 14))
+		desc_lbl = Label(playlist_window, bg=df_bg_col, fg=text_color, text="Dis playlist?", font=("Comic Sans MS", 14))
 		desc_lbl.grid(row=0, column=0, pady=10)
 		
 		ext_var = StringVar()
-		ext_combobox = ttk.Combobox(playlist_form, values=("mp3", "webm audio", "webm video", "mp4", "mp4 (no_audio)"),
+		ext_combobox = ttk.Combobox(playlist_window,
+		                            values=("mp3", "webm audio", "webm video", "mp4", "mp4 (no_audio)"),
 		                            state='readonly', font=("Comic Sans MS", 14), width=14, foreground=text_color,
 		                            textvariable=ext_var)
 		ext_combobox.grid(row=0, column=1, padx=10)
 		
 		qual_var = StringVar()
-		quality_combobox = ttk.Combobox(playlist_form, textvariable=qual_var, state='readonly',
+		quality_combobox = ttk.Combobox(playlist_window, textvariable=qual_var, state='readonly',
 		                                font=("Comic Sans MS", 14), width=14, foreground=text_color)
 		quality_combobox.grid(row=0, column=2)
 		

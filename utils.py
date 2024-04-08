@@ -1,11 +1,11 @@
 import os
 import shutil
-from tkinter import Widget, Toplevel, Entry
+from tkinter import Widget, Toplevel, Entry, Tk
 
 
-def btn_glow(*trash, widget: Widget, enter: bool, back_color="#313131", glow_color="#414141"):
+def btn_glow(*event, widget: Widget, enter: bool, back_color="#313131", glow_color="#414141"):
 	"""
-	:type enter: True-We're entering, False-We're leaving
+	:param enter: True - when entering, False - when exiting.
 	"""
 	
 	if enter:
@@ -14,7 +14,10 @@ def btn_glow(*trash, widget: Widget, enter: bool, back_color="#313131", glow_col
 		widget["bg"] = back_color
 
 
-def seconds_to_time(seconds: int):
+def seconds_to_time(seconds: int) -> str:
+	"""
+	:return: Formatted like "Days:Hours:Minutes:Seconds"
+	"""
 	minutes = seconds // 60
 	seconds %= 60
 	hours = minutes // 60
@@ -47,7 +50,10 @@ def hide_show(widget: Widget, show=None):
 		widget.grid_remove()
 
 
-def out_of_bounds_question(tk: Toplevel):
+def out_of_bounds_question(tk: Toplevel | Tk):
+	"""
+	Fixes a window if it goes out of the screen.
+	"""
 	tk.update_idletasks()
 	x, y = map(int, tk.geometry().split("+")[1:])
 	width, height = tk.winfo_reqwidth(), tk.winfo_reqheight()
@@ -66,6 +72,9 @@ def out_of_bounds_question(tk: Toplevel):
 
 
 def create_playlist_file(save_path, file_name) -> str:
+	"""
+	:return: Playlist file path.
+	"""
 	prefix = ""
 	if os.path.exists(fr"{save_path}/{file_name}"):
 		prefix = 1
@@ -84,7 +93,7 @@ def get_new_filepath(location, title):
 	return new_path
 
 
-def rename(old, new):
+def rename(old, new) -> str:
 	if os.path.exists(new):
 		path, newname = os.path.split(new)
 		prefix = 1

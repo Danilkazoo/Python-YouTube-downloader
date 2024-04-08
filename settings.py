@@ -8,47 +8,51 @@ standart_settings = (
 	"do_quick=False",
 	"quick_type=webm audio",
 	"quick_quality=best",
-	"fun_stats_all_videos=0",
-	"ender_wanna_destroiiii_da_interneeet=True",
-	"stop_spammin_these_fkin_playlists=True",
-	"max_panels_height=500",
+	"downloaded_videos_stats=0",
+	"download_prewievs=True",
+	"stop_spamming_playlists=True",
+	"max_window_height=500",
 	"create_new_files=True",
 	"choose_title=True",
 	"was_I_sleeping_today=False"
 )
+
 
 def default_settings():
 	with open("vanya_ez4.txt", "w") as f:
 		f.write('\n'.join(standart_settings))
 
 
-def get_settings(*names, all=False):
+def get_settings(*names, get_all=False) -> dict:
+	"""
+
+	:param names: Name of setting to get, the one on the left.
+	:param get_all:  Get all settings.
+	:return: 
+	"""
 	nam_vals = {}
 	with open("vanya_ez4.txt", "r+") as f:
 		data = f.read().rstrip('\n').splitlines()
-		data = dict([n.split('=') for n in data])
+		data = dict((n.split('=') for n in data))
 		
-		if all:
+		if get_all:
 			return data
 		
 		for name in names:
 			if name in data:
 				nam_vals[name] = data[name]
 			else:
-				nam_vals[name] = "Not here buddy"
-	
-	'''for Bool in ('print', "do_quick", "ender_wanna_destroiiii_da_interneeet",
-	             "stop_spammin_these_fkin_playlists", "create_new_files"):
-		unmodded_settings[Bool] = unmodded_settings[Bool] == "True"
-	for Int in ('visual_theme', "fun_stats_all_videos"):
-		unmodded_settings[Int] = int(unmodded_settings[Int])'''
+				nam_vals[name] = "Not found"
 	
 	return nam_vals
 
 
-# Not checking mistakes like incorrect input
-# Should be ONE of them - how is more comfortable
-def update_settings(dict_updates=None, **updates):
+def set_settings(dict_updates: dict = None, **updates):
+	"""
+
+	:param dict_updates: Send here dict {"setting_to_update": "value_to_update"}
+	:param updates: OR use it as kwargs, and send it like setting_name=value
+	"""
 	if not updates and not dict_updates:
 		return
 	
@@ -57,7 +61,7 @@ def update_settings(dict_updates=None, **updates):
 	
 	with open("vanya_ez4.txt", "r") as f:
 		data = f.read().rstrip('\n').splitlines()
-		data = dict([n.split('=') for n in data])
+		data = dict((n.split('=') for n in data))
 	
 	for update in updates:
 		data[update] = updates[update]
@@ -66,9 +70,10 @@ def update_settings(dict_updates=None, **updates):
 			f.write(f"{value}={data[value]}\n")
 
 
-def check_missing_settings(settings):
+def check_missing_settings(settings) -> dict | None:
 	"""
-	:return: True - updates missing, False - no updates
+	Checks and returns settings that are present in default settings, but not in a settings file.
+	:return: Dictionary with all missing settings
 	"""
 	missing = {}
 	for setting in standart_settings:
@@ -77,7 +82,5 @@ def check_missing_settings(settings):
 			missing[sname] = sval
 	
 	if missing:
-		update_settings(missing)
-		return True
-	else:
-		return False
+		set_settings(missing)
+		return missing

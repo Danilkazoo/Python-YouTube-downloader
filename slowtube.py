@@ -167,11 +167,12 @@ def filter_streams(streams: pytube.query.StreamQuery, settings: dict) -> pytube.
 	return videos
 
 
-def download_video(stream: pytube.streams.Stream, save_path, **settings) -> str:
+def download_video(stream: pytube.streams.Stream, full_path, **settings) -> str:
 	"""
 	:return: Return real path of a downloaded file.
 	"""
 	
+	save_path = full_path  # It is here to send a real path, not in settings save_path in settings
 	final_extension = settings.get("extension")
 	start_name = settings.get("name")
 	

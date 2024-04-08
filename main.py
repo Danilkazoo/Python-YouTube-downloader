@@ -178,9 +178,10 @@ class Main(Tk):
 		self.panels_frm.update_idletasks()
 		
 		# This video frame is used for EVERY panel with this video - queue, progress, downloaded
-		this_video_frame = Frame(self.panels_frm, background="red", highlightthickness=0, height=73, borderwidth=0)
+		this_video_frame = Frame(self.panels_frm, highlightthickness=0, height=self.video_panel_height, borderwidth=0)
 		this_video_frame.pack(fill=X)
-		queue_frm = Frame(this_video_frame, background=back_color, highlightthickness=0, height=73, borderwidth=0)
+		queue_frm = Frame(this_video_frame, background=back_color, highlightthickness=0, height=self.video_panel_height,
+		                  borderwidth=0)
 		queue_frm.pack(fill=X)
 		
 		# Info about video in queue
@@ -221,7 +222,8 @@ class Main(Tk):
 		back_color = self.disabled_color
 		text_color = "black"
 		
-		error_frm = Frame(self.panels_frm, background=back_color, highlightthickness=0, height=73, borderwidth=0)
+		error_frm = Frame(self.panels_frm, background=back_color, highlightthickness=0, height=self.video_panel_height,
+		                  borderwidth=0)
 		error_frm.pack(fill=X)
 		error_frm.grid_propagate(False)
 		
@@ -265,15 +267,15 @@ class Main(Tk):
 			text_color = self.purple_text
 		
 		progress_frm = Frame(self.this_video_frame, background=back_color, highlightbackground=highlight_color,
-		                     highlightthickness=0, height=73, borderwidth=0)
+		                     highlightthickness=0, height=self.video_panel_height, borderwidth=0)
 		progress_frm.pack(fill=X)
 		self.progress_frm = progress_frm
 		self.progress_canvas = Canvas(progress_frm, background=back_color, highlightcolor=highlight_color,
-		                              highlightthickness=0, height=73, borderwidth=0)
+		                              highlightthickness=0, height=self.video_panel_height, borderwidth=0)
 		self.progress_canvas.pack(fill=X)
 		
 		# I just resize a green rectangle according to progress
-		self.progress_canvas.create_rectangle(0, 0, 0, 73, fill='green')
+		self.progress_canvas.create_rectangle(0, 0, 0, self.video_panel_height, fill='green')
 		self.progress_canvas.create_text(60, 55, text="0%", font=(self.main_font, 14, 'bold'), fill=text_color,
 		                                 justify='left')
 		
@@ -344,7 +346,7 @@ class Main(Tk):
 			text_color = self.purple_text
 		
 		downloaded_frm = Frame(self.this_video_frame, background=back_color, highlightbackground=border_color,
-		                       highlightthickness=5, height=73)
+		                       highlightthickness=5, height=self.video_panel_height)
 		downloaded_frm.pack(fill=X)
 		
 		if not this_url:
@@ -606,12 +608,8 @@ class Main(Tk):
 	
 	# Settings
 	def create_settings_window(self):
-		def update(*event):
-			if os.path.exists(save_path_var.get()):
-				self.settings['save_path'] = save_path_var.get()
-				save_path_en.configure(background=back_color)
-			else:
-				save_path_en.configure(background=self.disabled_color)  # Highlights entry if input location is wrong
+		def full_update(*event):
+			input_save_location_check()
 			
 			self.settings['print'] = debug_var.get()
 			self.settings['visual_theme'] = theme_var.get()
@@ -658,12 +656,15 @@ class Main(Tk):
 			if self.settings['print']:
 				print(self.settings)
 		
-		def path_insert():
-			path = tkinter.filedialog.askdirectory(title="WHERE IS THE ANIME LOCATION", parent=settings_frame)
-			save_path_var.set(path)
+		def btn_path_insert():
+			path = tkinter.filedialog.askdirectory(title="Choose save location", parent=settings_window)
+			if path:
+				save_path_var.set(path)
 		
-		def default():
+		def set_default():
+			current_downloaded = self.settings.get("downloaded_videos_stats")
 			default_settings()
+			set_settings(downloaded_videos_stats=current_downloaded)
 			
 			unmodded_settings = get_settings(get_all=True)
 			for Bool in ('print', "do_quick", "download_prewievs",
@@ -691,11 +692,11 @@ class Main(Tk):
 			
 			for var in (save_path_var, debug_var, fast_var, theme_var, fast_ext_var, fast_quality_var, preview_var,
 			            playlist_spam_var, create_new_files_var, choose_title_var):
-				var.trace('w', update)
+				var.trace('w', full_update)
 			
-			fun_stats_lbl.configure(text=f"Всего скачано видосеков: {self.settings['downloaded_videos_stats']}")
+			fun_stats_lbl.configure(text=f"Total downloaded videos: {self.settings['downloaded_videos_stats']}")
 			
-			update()
+			full_update()
 		
 		def get_quality(*event):
 			ext = fast_ext_var.get()
@@ -708,10 +709,10 @@ class Main(Tk):
 			fast_quality_var.set(quals[0])
 		
 		def ondestroy():
-			update()
-			settings_frame.destroy()
+			full_update()
+			settings_window.destroy()
 		
-		def save_path_rmb_popup(event=None):
+		def save_path_rmb_popup(event):
 			x, y = event.x_root, event.y_root
 			
 			try:
@@ -720,144 +721,159 @@ class Main(Tk):
 				save_path_rmb_menu.grab_release()
 		
 		def menu_path_insert():
-			print(1)
 			save_path_var.set("")
 			save_path_en.event_generate("<<Paste>>")
 		
 		def menu_path_copy():
-			print(2)
 			self.clipboard_clear()
 			self.clipboard_append(save_path_var.get())
 		
-		back_color = "#313131"
-		text_color = self.df_text_color
-		combostyle = ttk.Style()
+		def input_save_location_check():
+			if os.path.exists(save_path_var.get()):
+				self.settings['save_path'] = save_path_var.get()
+				save_path_en.configure(background=back_color)
+			else:
+				save_path_en.configure(background=self.disabled_color)  # Highlights entry if input location is wrong
 		
+		def update_checkbox(setting_name: str, bool_var: BooleanVar, checkbtn: Checkbutton):
+			checked = bool_var.get()
+			self.settings[setting_name] = checked
+			set_settings({setting_name: checked})
+			
+			if checked:
+				checkbtn.configure(fg=self.enabled_color)
+			else:
+				checkbtn.configure(fg=self.disabled_color)
+			
+			if self.settings.get("print"):
+				print(self.settings)
+		
+		back_color = self.df_widgets_bg_col
+		text_color = self.df_text_color
+		
+		combostyle = ttk.Style()
 		combostyle.theme_use('combostyle')
 		
-		settings_frame = Toplevel(self, bg=self.df_frame_background_color, bd=0, padx=10, pady=10)
-		settings_frame.title("Settings")
-		settings_frame.geometry(self.wm_geometry()[self.wm_geometry().index("+"):])
-		# settings_frame.attributes('-topmost', 'true')
+		settings_window = Toplevel(self, bg=self.df_frame_background_color, bd=0, padx=10, pady=10)
+		settings_window.title("Settings")
+		settings_window.geometry(self.wm_geometry()[self.wm_geometry().index("+"):])  # On top of main window
+		settings_window.bind("<Key>", lambda event: input_clipboard(event, entry=save_path_en))
+		settings_window.bind("<<Control-v>>", lambda event: menu_path_insert())
 		
-		default_btn = Button(settings_frame, text="Default", command=default, font=self.small_font,
+		default_btn = Button(settings_window, text="Default", command=set_default, font=self.small_font,
 		                     background=back_color, foreground=text_color)
 		default_btn.grid(row=10, column=5)
 		
-		save_path_lbl = Label(settings_frame, text="Save path", font=(self.main_font, 14),
+		save_path_lbl = Label(settings_window, text="Save path", font=(self.main_font, 14),
 		                      bg=self.df_frame_background_color, fg=text_color)
 		save_path_lbl.grid(row=0, column=1, pady=(10, 5))
 		save_path_var = StringVar()
 		save_path_var.set(self.settings['save_path'])
-		save_path_en = Entry(settings_frame, width=30, textvariable=save_path_var, background=back_color,
+		save_path_en = Entry(settings_window, width=30, textvariable=save_path_var, background=back_color,
 		                     foreground=text_color, font=(self.main_font, 14))
 		save_path_en.grid(row=1, column=1, padx=10)
-		save_path_var.trace('w', update)
-		save_path_btn = Button(settings_frame, text='📁', background=back_color, foreground=text_color, font="Arial 18",
-		                       command=path_insert)
-		save_path_btn.grid(row=1, column=2)
-		save_path_en.bind("<Key>", lambda x: input_clipboard(x, entry=save_path_en))
+		save_path_var.trace('w', full_update)
 		
-		save_path_rmb_menu = Menu(settings_frame, tearoff=0, font=(self.main_font, 12))
+		save_path_rmb_menu = Menu(settings_window, tearoff=0, font=(self.main_font, 12))
 		save_path_rmb_menu.add_command(label='Insert', command=menu_path_insert)
 		save_path_rmb_menu.add_command(label='Copy', command=menu_path_copy)
 		save_path_en.bind("<Button-3>", save_path_rmb_popup)
 		
+		save_path_btn = Button(settings_window, text='📁', background=back_color, foreground=text_color, font="Arial 18",
+		                       command=btn_path_insert)
+		save_path_btn.grid(row=1, column=2)
+		
 		choose_title_var = BooleanVar()
-		choose_title_choice = Checkbutton(settings_frame,
-		                                  text="Предлагать заменить\nимена видео", justify="left",
+		choose_title_choice = Checkbutton(settings_window, text="Suggest alternative\nvideo titles", justify="left",
 		                                  variable=choose_title_var, fg=text_color, bg=self.df_frame_background_color,
 		                                  font=self.small_font)
 		choose_title_var.set(self.settings['choose_title'])
-		choose_title_var.trace('w', update)
+		choose_title_var.trace('w',
+		                       lambda *event: update_checkbox("choose_title", choose_title_var, choose_title_choice))
 		choose_title_choice.grid(row=1, column=6, padx=10, pady=10, sticky="w")
 		
 		create_new_files_var = BooleanVar()
-		create_new_files_choice = Checkbutton(settings_frame,
-		                                      text="Группировать плейлист\nв новую папку", justify="left",
+		create_new_files_choice = Checkbutton(settings_window, text="Group playlists\nin a new file", justify="left",
 		                                      variable=create_new_files_var, fg=text_color,
-		                                      bg=self.df_frame_background_color,
-		                                      font=self.small_font)
+		                                      bg=self.df_frame_background_color, font=self.small_font)
 		create_new_files_var.set(self.settings['create_new_files'])
-		create_new_files_var.trace('w', update)
+		create_new_files_var.trace('w', lambda *event: update_checkbox("create_new_files", create_new_files_var,
+		                                                               create_new_files_choice))
 		create_new_files_choice.grid(row=2, column=6, padx=10, pady=10, sticky="w")
 		
 		preview_var = BooleanVar()
-		preview_choice = Checkbutton(settings_frame, text="Добавлять превьюшки при скачке",
-		                             variable=preview_var, fg=text_color, bg=self.df_frame_background_color,
-		                             font=self.small_font)
+		preview_choice = Checkbutton(settings_window, text="Add previews", variable=preview_var, fg=text_color,
+		                             bg=self.df_frame_background_color, font=self.small_font)
 		preview_var.set(self.settings['download_prewievs'])
-		preview_var.trace('w', update)
-		preview_choice.grid(row=3, column=6, padx=10, pady=10)
+		preview_var.trace('w', lambda *event: update_checkbox("download_prewievs", preview_var, preview_choice))
+		preview_choice.grid(row=3, column=6, padx=10, pady=10, sticky='w')
 		
 		playlist_spam_var = BooleanVar()
-		playlist_spam_choice = Checkbutton(settings_frame,
-		                                   text="Не спамить плейлистом при\nссылке на видео", justify="left",
-		                                   variable=playlist_spam_var, fg=text_color, bg=self.df_frame_background_color,
-		                                   font=self.small_font)
+		playlist_spam_choice = Checkbutton(settings_window,
+		                                   text="Disable downloading playlist\nfrom inputted video from it",
+		                                   justify="left", variable=playlist_spam_var, fg=text_color,
+		                                   bg=self.df_frame_background_color, font=self.small_font)
 		playlist_spam_var.set(self.settings['stop_spamming_playlists'])
-		playlist_spam_var.trace('w', update)
+		playlist_spam_var.trace('w', lambda *event: update_checkbox("stop_spamming_playlists", playlist_spam_var,
+		                                                            playlist_spam_choice))
 		playlist_spam_choice.grid(row=4, column=6, padx=10, pady=10, sticky="w")
 		
 		debug_var = BooleanVar()
-		debug_choice = Checkbutton(settings_frame, text="hey wanna sum spam ?", variable=debug_var, fg=text_color,
+		debug_choice = Checkbutton(settings_window, text="hey wanna sum spam ?", variable=debug_var, fg=text_color,
 		                           bg=self.df_frame_background_color, font=self.small_font)
 		debug_var.set(self.settings['print'])
-		debug_var.trace('w', update)
-		debug_choice.grid(row=10, column=6, padx=10, pady=10, sticky='w')
+		debug_var.trace('w', lambda *event: update_checkbox("print", debug_var, debug_choice))
+		debug_choice.grid(row=10, column=6, padx=10, pady=10, sticky='w')  # TODO: Find how to add this only for me
 		
-		theme_lbl = Label(settings_frame, text="Мега внешний дизааааайн", font=(self.main_font, 14),
+		theme_lbl = Label(settings_window, text="Visual", font=(self.main_font, 14),
 		                  bg=self.df_frame_background_color,
 		                  fg=text_color)
 		theme_lbl.grid(row=2, column=1, pady=(15, 5))
 		theme_var = IntVar()
 		theme_var.set(self.settings['visual_theme'])
-		theme_combo = ttk.Combobox(settings_frame, values=('1', '2'), state="readonly", font=(self.main_font, 14),
+		theme_combo = ttk.Combobox(settings_window, values=('1', '2'), state="readonly", font=(self.main_font, 14),
 		                           textvariable=theme_var, width=2)
-		theme_var.trace('w', update)
+		theme_var.trace('w', full_update)
 		theme_combo.grid(row=3, column=1)
 		
 		fast_var = BooleanVar()
 		fast_var.set(self.settings['do_quick'])
-		fast_check = Checkbutton(settings_frame, text="Не выбирать чо скачивать 10 миллиардов раз",
+		fast_check = Checkbutton(settings_window, text="Fast download (choose required quality)",
 		                         variable=fast_var, fg=text_color, bg=self.df_frame_background_color,
 		                         font=(self.main_font, 14))
 		fast_check.grid(row=1, column=3, padx=(50, 10), columnspan=2)
-		fast_var.trace('w', update)
+		fast_var.trace('w', full_update)
 		
-		fast_ext_lbl = Label(settings_frame, text="Формат", font=(self.main_font, 14),
+		fast_ext_lbl = Label(settings_window, text="Type", font=(self.main_font, 14),
 		                     bg=self.df_frame_background_color,
 		                     fg=text_color)
 		fast_ext_lbl.grid(row=2, column=3)
 		fast_ext_var = StringVar()
 		fast_ext_var.set(self.settings['quick_type'])
 		fast_ext_var.trace('w', get_quality)
-		fast_ext_comb = ttk.Combobox(settings_frame,
-		                             values=self.possible_extensions,
-		                             state="readonly",
+		fast_ext_comb = ttk.Combobox(settings_window, values=self.possible_extensions, state="readonly",
 		                             font=(self.main_font, 14), textvariable=fast_ext_var, width=11)
 		fast_ext_comb.grid(row=3, column=3)
 		
-		fast_quality_lbl = Label(settings_frame, text="Качество", font=(self.main_font, 14),
-		                         bg=self.df_frame_background_color,
-		                         fg=text_color)
+		fast_quality_lbl = Label(settings_window, text="Quality", font=(self.main_font, 14),
+		                         bg=self.df_frame_background_color, fg=text_color)
 		fast_quality_lbl.grid(row=2, column=4)
 		fast_quality_var = StringVar()
-		fast_quality_comb = ttk.Combobox(settings_frame, state="readonly",
+		fast_quality_comb = ttk.Combobox(settings_window, state="readonly",
 		                                 font=(self.main_font, 14), textvariable=fast_quality_var, width=11)
 		get_quality()
 		fast_quality_comb.grid(row=3, column=4)
 		fast_quality_var.set(self.settings['quick_quality'])
-		fast_quality_var.trace('w', update)
+		fast_quality_var.trace('w', full_update)
 		
-		fun_stats_lbl = Label(settings_frame,
-		                      text=f"Всего скачано видосеков: {self.settings['downloaded_videos_stats']}",
+		fun_stats_lbl = Label(settings_window,
+		                      text=f"Total downloaded videos: {self.settings['downloaded_videos_stats']}",
 		                      font=(self.main_font, 14), bg=self.df_frame_background_color, fg=text_color)
 		fun_stats_lbl.grid(row=0, column=5, columnspan=10)
 		
-		update()
-		out_of_bounds_question(settings_frame)
-		settings_frame.protocol("WM_DELETE_WINDOW", ondestroy)
+		full_update()
+		out_of_bounds_question(settings_window)
+		settings_window.protocol("WM_DELETE_WINDOW", ondestroy)
 		
 		for widget in (save_path_btn, default_btn):
 			widget.bind("<Enter>", lambda _, w=widget: btn_glow(widget=w, enter=True))
@@ -1107,7 +1123,7 @@ class Main(Tk):
 			
 			def switch_all():
 				"""
-				Switches all checkboxes from ON to OFF and vice versa. 
+				Switches all checkboxes from ON to OFF and vice versa.
 				"""
 				nonlocal check_state
 				for video, checkbtn in video_choices:
@@ -1205,7 +1221,8 @@ class Main(Tk):
 					panel_text_color = self.purple_text
 				
 				dis_video_frm = Frame(videos_frm, background=panel_back, highlightbackground=panel_border,
-				                      highlightthickness=2, height=63, width=self.playlist_window_width)
+				                      highlightthickness=2, height=self.playlist_window_height,
+				                      width=self.playlist_window_width)
 				dis_video_frm.pack(fill=X)
 				dis_video_frm.grid_propagate(False)
 				
@@ -1396,6 +1413,8 @@ class Main(Tk):
 		self.main_font = "Comic Sans MS"
 		self.small_font = (self.main_font, 12)
 		self.playlist_window_width = 535
+		self.playlist_window_height = 63
+		self.video_panel_height = 73
 
 
 if __name__ == "__main__":

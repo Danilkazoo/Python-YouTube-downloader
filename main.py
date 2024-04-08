@@ -12,7 +12,7 @@ from PIL import ImageTk, Image
 from pathvalidate import sanitize_filename as pv_sanitize
 
 import slowtube
-from setting_destroyer_of_worlds import *
+from settings import *
 from utils import *
 
 
@@ -20,20 +20,22 @@ from utils import *
 class Main(Tk):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
-		self.main_font = ("Comic Sans MS", 12)
 		self.prev_url = None
 		self.streams = None
-		self.understandable_streams = None
+		self.understandable_streams = []
 		self.downloaded_count = 0
 		self.video = None
+		self.input_video = None
 		
-		self.images = []
+		self.preview_images = []
 		self.playlist_images = []
 		self.download_queue = deque()
 		self.queue_panels = deque()
 		self.downloading_now = False
 		
+		self.init_constants()
 		self.init_settings()
+		self.resizable(False, True)
 		self.update_idletasks()
 		
 		self.download_frame = self.download_frame_gen()
@@ -51,78 +53,80 @@ class Main(Tk):
 		if self.settings['do_quick']:
 			self.streams_var.set(self.settings.get("quick_quality"))
 	
-	# Main frame with all input widgets.
 	def download_frame_gen(self):
-		def new_thread_url_check(*trash):
+		"""
+		Main frame with all inputs and outputs.
+		"""
+		
+		def new_thread_url_check(*event):
 			url_check_thread = threading.Thread(target=self.check_url)
 			url_check_thread.start()
 		
-		df_bg_col = "black"
-		back_color = "#313131"
-		border_color = "#383838"
-		text_color = "#E5E5E5"
-		
 		combostyle = ttk.Style()
-		
 		combostyle.theme_create('combostyle', parent='alt', settings={'TCombobox': {
-			'configure': {'selectbackground': border_color, 'fieldbackground': border_color, 'background': df_bg_col,
-			              'selectforeground': text_color, 'fieldforeground': text_color, 'foreground': text_color}},
+			'configure': {'selectbackground': self.df_border_color, 'fieldbackground': self.df_border_color,
+			              'background': self.df_frame_background_color, 'selectforeground': self.df_text_color,
+			              'fieldforeground': self.df_text_color, 'foreground': self.df_text_color}},
 			'TCheckbutton': {
-				'configure': {'foreground': text_color, 'background': df_bg_col, 'font': ("Comic Sans Ms", 14)}}
+				'configure': {'foreground': self.df_text_color, 'background': self.df_frame_background_color,
+				              'font': (self.main_font, 14)}}
 		})
 		combostyle.theme_use('combostyle')
 		
-		df = Frame(self, padx=10, pady=10, bg=df_bg_col, height=800, width=800)
+		df = Frame(self, padx=10, pady=10, bg=self.df_frame_background_color, height=800, width=800)
 		
-		self.url_ins_btn = Button(df, text="Вставить ссылку", font=("Comic Sans MS", 15), height=2, relief="solid",
-		                          command=lambda: self.url_var.set(self.clipboard_get()), bg=back_color, fg=text_color)
-		self.url_ins_btn.grid(row=1, column=1, padx=(10, 0), pady=10)
+		url_ins_btn = Button(df, text="Вставить ссылку", font=(self.main_font, 15), height=2, relief="solid",
+		                     command=lambda: self.url_var.set(self.clipboard_get()), bg=self.df_widgets_bg_col,
+		                     fg=self.df_text_color)
+		url_ins_btn.grid(row=1, column=1, padx=(10, 0), pady=10)
 		
 		self.url_var = StringVar()
 		self.url_var.trace('w', new_thread_url_check)
-		self.en_url = Entry(df, font=self.main_font, width=30, textvariable=self.url_var, bg=back_color, fg=text_color,
-		                    relief="solid")
+		self.en_url = Entry(df, font=self.small_font, width=30, textvariable=self.url_var, bg=self.df_widgets_bg_col,
+		                    fg=self.df_text_color, relief="solid")
 		self.bind('<Control-v>', lambda _: self.url_var.set(self.clipboard_get()))
 		
 		self.en_url.grid(row=1, column=2, padx=(10, 20))
 		
-		self.extension_var = StringVar(value="webm audio")
-		self.extension_combo = ttk.Combobox(df, values=["mp3", "webm audio", "webm video", "mp4", "mp4 (no_audio)"],
+		self.extension_var = StringVar()
+		self.extension_combo = ttk.Combobox(df, values=self.possible_extensions,
 		                                    state="readonly", width=11,
-		                                    font=self.main_font, textvariable=self.extension_var)
+		                                    font=self.small_font, textvariable=self.extension_var)
 		self.extension_combo.grid(row=1, column=3, padx=(0, 20))
-		self.extension_var.trace('w', self.check_url)
+		self.extension_var.trace('w', new_thread_url_check)
 		
 		self.streams_var = StringVar()
-		self.understandable_streams = []
 		self.stream_choice = ttk.Combobox(df, values=self.understandable_streams, state="readonly", width=11,
-		                                  font=self.main_font, textvariable=self.streams_var)
+		                                  font=self.small_font, textvariable=self.streams_var)
 		self.stream_choice.grid(row=1, column=4)
 		
-		self.download_button = Button(df, text="Donwload", font=self.main_font, command=self.add_to_queue,
-		                              height=2, bg=back_color, fg=text_color, relief='solid')
+		self.download_button = Button(df, text="Donwload", font=self.small_font, command=self.add_to_queue,
+		                              height=2, bg=self.df_widgets_bg_col, fg=self.df_text_color, relief='solid')
 		self.download_button.grid(row=1, column=5, padx=(20, 10))
 		
 		if self.settings['do_quick']:
 			for widget in (self.extension_combo, self.stream_choice, self.download_button):
-				widget.configure(state='disabled', background=df_bg_col, foreground='#C54545')
+				widget.configure(state='disabled', background=self.df_frame_background_color,
+				                 foreground=self.disabled_color)
 		else:
 			for widget in (self.extension_combo, self.stream_choice):
-				widget.configure(state='readonly', background=back_color, foreground=text_color)
-			self.download_button.configure(state="normal", background=back_color, foreground=text_color)
+				widget.configure(state='readonly', background=self.df_widgets_bg_col, foreground=self.df_text_color)
+			
+			self.download_button.configure(state="normal", background=self.df_widgets_bg_col,
+			                               foreground=self.df_text_color)
 			self.extension_var.set(self.settings.get("quick_type"))
 		
 		# Just adds glow when hovering
-		for widget in (self.url_ins_btn, self.en_url, self.download_button):
+		for widget in (url_ins_btn, self.en_url, self.download_button):
 			widget.bind("<Enter>", lambda _, w=widget: btn_glow(widget=w, enter=True))
 			widget.bind("<Leave>", lambda _, w=widget: btn_glow(widget=w, enter=False))
 		
 		# Canvas for scrolling
-		self.canvas_panels_frm = Frame(df, background=df_bg_col, relief='solid')
+		self.canvas_panels_frm = Frame(df, background=self.df_frame_background_color, relief='solid')
 		self.canvas_panels_frm.grid(row=2, column=1, columnspan=200, pady=10, sticky="we")
 		
-		df_canvas = Canvas(self.canvas_panels_frm, background=df_bg_col, relief='solid', highlightthickness=0,
-		                   height=0, width=0)
+		df_canvas = Canvas(self.canvas_panels_frm, background=self.df_frame_background_color, relief='solid',
+		                   highlightthickness=0, height=0, width=0)
 		self.df_canvas = df_canvas
 		df_canvas.pack(side=LEFT, fill=BOTH, expand=True)
 		
@@ -143,43 +147,54 @@ class Main(Tk):
 	
 	# Gray panels for videos in queue
 	def create_queue_panel(self, name, audio, extension, this_video, this_stream, playlist_name, ext_type):
-		def on_hover(*trash):
+		"""
+		All this input information is used mostly to find
+		"""
+		
+		def on_hover(*event):
 			hide_show(rem_btn, show=True)
 		
-		def out_hover(*trash):
+		def out_hover(*event):
 			hide_show(rem_btn, show=False)
 		
 		def del_this(frm, video_frm):
+			"""
+			This function deletes both this frame, AND this video overall frame, including from all queues.
+			So I use the most information about this video to be sure (it won't affect speed that much)
+			"""
 			this_find = (this_video, this_stream, audio, extension, name, this_video_frame, playlist_name, ext_type)
 			self.queue_panels.remove(frm)
 			self.download_queue.remove(this_find)
 			video_frm.destroy()
 			self.canvas_resize_logic()
 		
+		# Panels should have alternating colors
 		if len(self.panels_frm.winfo_children()) % 2:
 			back_color = "#666"
 		else:
 			back_color = "#555"
-		text_color = "#E5E5E5"
+		text_color = self.df_text_color
 		
 		self.panels_frm.update_idletasks()
 		
+		# This video frame is used for EVERY panel with this video - queue, progress, downloaded
 		this_video_frame = Frame(self.panels_frm, background="red", highlightthickness=0, height=73, borderwidth=0)
 		this_video_frame.pack(fill=X)
 		queue_frm = Frame(this_video_frame, background=back_color, highlightthickness=0, height=73, borderwidth=0)
 		queue_frm.pack(fill=X)
 		
-		Label(queue_frm, text=name, font=("Comic Sans MS", 16, 'bold'), fg=text_color,
+		# Info about video in queue
+		Label(queue_frm, text=name, font=(self.main_font, 16, 'bold'), fg=text_color,
 		      bg=back_color, justify="left").grid(row=0, column=0, columnspan=4)
-		Label(queue_frm, text=extension, font=("Comic Sans MS", 14, 'bold'), fg=text_color, bg=back_color,
+		Label(queue_frm, text=extension, font=(self.main_font, 14, 'bold'), fg=text_color, bg=back_color,
 		      justify='left').grid(row=1, column=0, columnspan=4)
 		if audio:
-			Label(queue_frm, text="(no audio)", font=("Comic Sans MS", 14, 'bold'), fg=text_color, bg=back_color,
+			Label(queue_frm, text="(no audio)", font=(self.main_font, 14, 'bold'), fg=text_color, bg=back_color,
 			      justify='right').grid(row=1, column=1)
 		
 		rem_btn = Button(queue_frm, text="X", font="Arial 20 bold",
-		                 command=lambda: del_this(queue_frm, this_video_frame), fg=text_color,
-		                 bg=back_color, relief="flat")
+		                 command=lambda: del_this(queue_frm, this_video_frame),
+		                 fg=text_color, bg=back_color, relief="flat")
 		rem_btn.grid(row=0, column=2, rowspan=2)
 		rem_btn.bind("<Enter>", lambda _, w=rem_btn: btn_glow(widget=w, enter=True, glow_color="#777777"))
 		rem_btn.bind("<Leave>", lambda _, w=rem_btn: btn_glow(widget=w, enter=False, back_color=back_color))
@@ -193,24 +208,24 @@ class Main(Tk):
 	
 	# Panels for errors
 	def create_error_panel(self, url, error):
-		def on_hover(*trash):
+		def on_hover(*event):
 			hide_show(del_btn, show=True)
 		
-		def out_hover(*trash):
+		def out_hover(*event):
 			hide_show(del_btn, show=False)
 		
 		def del_this(video_frm):
 			video_frm.destroy()
 			self.canvas_resize_logic()
 		
-		back_color = "#f66"
-		text_color = "#111"
+		back_color = self.disabled_color
+		text_color = "black"
 		
 		error_frm = Frame(self.panels_frm, background=back_color, highlightthickness=0, height=73, borderwidth=0)
 		error_frm.pack(fill=X)
 		error_frm.grid_propagate(False)
 		
-		Label(error_frm, text=f"{error}\n{url}", font=("Comic Sans MS", 16, 'bold'), fg=text_color,
+		Label(error_frm, text=f"{error}\n{url}", font=(self.main_font, 16, 'bold'), fg=text_color,
 		      bg=back_color, justify="left").grid(row=0, column=0)
 		error_frm.columnconfigure(0, weight=1)
 		
@@ -223,7 +238,6 @@ class Main(Tk):
 		
 		error_frm.bind('<Enter>', on_hover)
 		error_frm.bind('<Leave>', out_hover)
-		error_frm.pack_propagate(False)
 		out_hover()
 		self.canvas_resize_logic()
 	
@@ -234,47 +248,49 @@ class Main(Tk):
 		
 		if variant == 1:
 			if number % 2 == 0:
-				back_color = "#425B83"
-				text_color = "#F2F2F2"
-				highlight_color = "#526B93"
+				back_color = self.blue_even_back
+				text_color = self.blue_even_text
+				highlight_color = self.blue_even_highlight
 			else:
-				back_color = "#6189C0"
-				text_color = "#E5E5E5"
-				highlight_color = "#5179B0"
+				back_color = self.blue_odd_back
+				text_color = self.blue_ood_text
+				highlight_color = self.blue_odd_highlight
 		else:
 			if number % 2 == 0:
-				back_color = "#704192"
-				highlight_color = "#8051a2"
+				back_color = self.purple_even_back
+				highlight_color = self.purple_even_highlight
 			else:
-				back_color = "#9373b2"
-				highlight_color = "#8363a2"
-			text_color = "#CDCDCD"
+				back_color = self.purple_odd_back
+				highlight_color = self.purple_odd_highlight
+			text_color = self.purple_text
 		
 		progress_frm = Frame(self.this_video_frame, background=back_color, highlightbackground=highlight_color,
 		                     highlightthickness=0, height=73, borderwidth=0)
 		progress_frm.pack(fill=X)
 		self.progress_frm = progress_frm
-		self.canvas = Canvas(progress_frm, background=back_color, highlightcolor=highlight_color, highlightthickness=0,
-		                     height=73, borderwidth=0)
-		self.canvas.pack(fill=X)
+		self.progress_canvas = Canvas(progress_frm, background=back_color, highlightcolor=highlight_color,
+		                              highlightthickness=0, height=73, borderwidth=0)
+		self.progress_canvas.pack(fill=X)
 		
-		self.canvas.create_rectangle(0, 0, 0, 73, fill='green')
-		self.canvas.create_text(60, 55, text="0%", font=("Comic Sans MS", 14, 'bold'), fill=text_color, justify='left')
+		# I just resize a green rectangle according to progress
+		self.progress_canvas.create_rectangle(0, 0, 0, 73, fill='green')
+		self.progress_canvas.create_text(60, 55, text="0%", font=(self.main_font, 14, 'bold'), fill=text_color,
+		                                 justify='left')
 		
 		name = self.video_name
-		width_label = Label(text=name, font=("Comic Sans MS", 16, 'bold')).winfo_reqwidth()
-		self.canvas.create_text(10 + width_label / 2, 25, text=name, font=("Comic Sans MS", 16, 'bold'),
-		                        fill=text_color)
+		width_label = Label(text=name, font=(self.main_font, 16, 'bold')).winfo_reqwidth()
+		self.progress_canvas.create_text(10 + width_label / 2, 25, text=name, font=(self.main_font, 16, 'bold'),
+		                                 fill=text_color)
 		self.panels_frm.update()
 		self.canvas_resize_logic()
 	
 	def progress_panel_update(self, percent: float):
-		cords = self.canvas.coords(1)
+		cords = self.progress_canvas.coords(1)
 		cords[2] = (self.progress_frm.winfo_width() / 100) * percent
 		
-		self.canvas.coords(1, *cords)
-		self.canvas.itemconfigure(2, text=f"{percent:.2f}%")
-		self.canvas.update()
+		self.progress_canvas.coords(1, *cords)
+		self.progress_canvas.itemconfigure(2, text=f"{percent:.2f}%")
+		self.progress_canvas.update()
 	
 	def progress_panel_donwloading(self, stream: pytube.streams.Stream, bytes: bytes, remaining: int):
 		will_convert = self.settings.get("extension") != stream.subtype
@@ -289,90 +305,85 @@ class Main(Tk):
 	
 	def delete_progress_panel(self):
 		self.progress_frm.destroy()
-		del self.progress_frm, self.canvas
 	
 	# Panels for downloaded video, with interactions
 	def create_downloaded_panel(self, download_location, downloaded_stream):
 		self.delete_progress_panel()
-		variant = self.settings.get('visual_theme')
+		visual_variant = self.settings.get('visual_theme')
 		self.downloaded_count += 1
 		number = self.downloaded_count
-		do_preview = self.settings.get("ender_wanna_destroiiii_da_interneeet")
+		do_preview = self.settings.get("download_prewievs")
 		video_name = self.video_name
 		this_url = self.video.watch_url
 		this_quality = slowtube.streams_to_human([downloaded_stream])[0]
 		
-		if variant == 1:
+		if visual_variant == 1:
 			if number % 2 == 0:
-				back_color = "#425B83"
-				border_color = "#2B3F52"
-				text_color = "#F2F2F2"
-				highlight_color = "#526B93"
-				highlight_border = "#3B4F62"
+				back_color = self.blue_even_back
+				border_color = self.blue_even_border
+				text_color = self.blue_even_text
+				highlight_color = self.blue_even_highlight
+				highlight_border = self.blue_even_highlight_border
 			else:
-				back_color = "#6189C0"
-				border_color = "#4E73A1"
-				text_color = "#E5E5E5"
-				highlight_color = "#5179B0"
-				highlight_border = "#1111FF"
+				back_color = self.blue_odd_back
+				border_color = self.blue_odd_border
+				text_color = self.blue_ood_text
+				highlight_color = self.blue_odd_highlight
+				highlight_border = self.blue_odd_highlight_border
 		else:
 			if number % 2 == 0:
-				back_color = "#704192"
-				border_color = "#602f78"
-				highlight_color = "#8051a2"
-				highlight_border = '#703f88'
+				back_color = self.purple_even_back
+				border_color = self.purple_even_border
+				highlight_color = self.purple_even_highlight
+				highlight_border = self.purple_even_highlight_border
 			else:
-				back_color = "#9373b2"
-				border_color = "#83609c"
-				highlight_color = "#8363a2"
-				highlight_border = '#73508c'
-			text_color = "#CDCDCD"
+				back_color = self.purple_odd_back
+				border_color = self.purple_odd_border
+				highlight_color = self.purple_odd_highlight
+				highlight_border = self.purple_odd_highlight_border
+			text_color = self.purple_text
 		
-		dis_video_frm = Frame(self.this_video_frame, background=back_color, highlightbackground=border_color,
-		                      highlightthickness=5, height=73)
-		dis_video_frm.pack(fill=X)
+		downloaded_frm = Frame(self.this_video_frame, background=back_color, highlightbackground=border_color,
+		                       highlightthickness=5, height=73)
+		downloaded_frm.pack(fill=X)
 		
-		if this_url:
-			this_url = this_url
-		else:
+		if not this_url:
 			this_url = self.url_var.get()
-		
-		if downloaded_stream is None:
-			downloaded_stream = self.streams[self.understandable_streams.index(self.streams_var.get())]
 		
 		file_size = downloaded_stream.filesize_mb
 		video_len = seconds_to_time(self.video.length)
 		
-		name_lbl = Label(dis_video_frm, text=video_name, font=("Comic Sans MS", 14), foreground=text_color,
+		name_lbl = Label(downloaded_frm, text=video_name, font=(self.main_font, 14), foreground=text_color,
 		                 background=back_color, anchor='w')
 		i = 13
-		dis_video_frm.update_idletasks()
-		while name_lbl.winfo_reqwidth() > dis_video_frm.winfo_width() - 70:  # Resize if name is too big
-			name_lbl.configure(font=("Comic Sans MS", i))
+		downloaded_frm.update_idletasks()
+		while name_lbl.winfo_reqwidth() > downloaded_frm.winfo_width() - 70:  # Resize if name is too big
+			name_lbl.configure(font=(self.main_font, i))
 			i -= 1
-			dis_video_frm.update_idletasks()
-		name_lbl.grid(column=2, row=0, sticky='we', columnspan=4)  # Name
+			downloaded_frm.update_idletasks()
+		name_lbl.grid(column=2, row=0, sticky='we', columnspan=4)
 		
-		info_lbl = Label(dis_video_frm, text=f"{video_len}  -  {self.full_extension}  -  {this_quality}  -  {file_size:.2f}Mb",
-		                 font=("Comic Sans MS", 13, 'bold'), foreground=text_color, background=back_color)
+		info_lbl = Label(downloaded_frm,
+		                 text=f"{video_len}  -  {self.full_extension}  -  {this_quality}  -  {file_size:.2f}Mb",
+		                 font=(self.main_font, 13, 'bold'), foreground=text_color, background=back_color)
 		info_lbl.grid(column=2, row=1, sticky="w", columnspan=20)  # Download info
 		
-		dis_video_frm.grid_columnconfigure(2, weight=1)
+		downloaded_frm.grid_columnconfigure(2, weight=1)
 		
-		# Interaction behaviour
+		# Interactions behaviour
 		def del_command(path, del_image, dis_frame, this_video_frm):
 			if not os.path.exists(path):
-				print("Неплохая попытка удалить несуществующий файл")
+				print("Good attempt to delete nonexistent file")
 			else:
 				os.remove(path)
 				if del_image:
-					self.images.remove(del_image)
+					self.preview_images.remove(del_image)
 			this_video_frm.destroy()
 			self.panels_arr.remove(dis_frame)
-			del dis_frame
 			self.canvas_resize_logic()
 		
 		def thing(main_field: Tk, event=None, temp_frame=None, a=1.0):
+			# this thing is blasphemy
 			if a <= 0:
 				temp_frame.destroy()
 				return
@@ -413,28 +424,29 @@ class Main(Tk):
 		
 		this_form = self.this_video_frame
 		delete_location = download_location
-		right_click_menu = Menu(dis_video_frm, tearoff=0, font=("Comic Sans MS", 12))
+		right_click_menu = Menu(downloaded_frm, tearoff=0, font=(self.main_font, 12))
 		right_click_menu.add_command(label='Delete',
 		                             command=lambda: del_command(delete_location, del_image=del_image,
-		                                                         dis_frame=dis_video_frm, this_video_frm=this_form))
+		                                                         dis_frame=downloaded_frm, this_video_frm=this_form))
 		right_click_menu.add_command(label='Copy a link', command=lambda: url_to_clipboard(this_url))
 		
+		# Basically, video can have 2 names, and user can swap them
 		new_title_path = get_new_filepath(download_location, self.video_title)
 		if self.video_title != video_name and self.settings["choose_title"]:
 			right_click_menu.add_command(label='Change name',
 			                             command=lambda: swap_video_title(video_name, self.video_title, name_lbl,
 			                                                              download_location, new_title_path))
-			title_lbl = Label(dis_video_frm, text=video_name, font=("Comic Sans MS", 12), foreground=text_color,
+			title_lbl = Label(downloaded_frm, text=video_name, font=(self.main_font, 12), foreground=text_color,
 			                  background=back_color, anchor='e')
 			i = 11
-			dis_video_frm.update_idletasks()
+			downloaded_frm.update_idletasks()
 			while title_lbl.winfo_reqwidth() > 450:  # Resize if title is too big
-				title_lbl.configure(font=("Comic Sans MS", i))
+				title_lbl.configure(font=(self.main_font, i))
 				i -= 1
-				dis_video_frm.update_idletasks()
+				downloaded_frm.update_idletasks()
 			title_lbl.configure(text=self.video_title)
 		else:
-			title_lbl = Label(dis_video_frm, foreground=text_color, background=back_color)
+			title_lbl = Label(downloaded_frm, foreground=text_color, background=back_color)  # Dummy
 		title_lbl.grid(column=2, row=1, columnspan=4, sticky="e", padx=(0, 100))
 		
 		def popup(event=None, widget=None):
@@ -448,7 +460,7 @@ class Main(Tk):
 			finally:
 				right_click_menu.grab_release()
 		
-		for responsive_part in (dis_video_frm, name_lbl, info_lbl, title_lbl):
+		for responsive_part in (downloaded_frm, name_lbl, info_lbl, title_lbl):
 			responsive_part.bind("<Button-3>", popup)
 			responsive_part.bind("<Button-1>", lambda event: url_to_clipboard(this_url, event))
 		
@@ -458,8 +470,8 @@ class Main(Tk):
 			info_lbl.configure(background=highlight_color)
 			name_lbl.configure(background=highlight_color)
 			title_lbl.configure(background=highlight_color)
-			dis_video_frm.configure(background=highlight_color, highlightcolor=highlight_border)
-			dis_video_frm.update()
+			downloaded_frm.configure(background=highlight_color, highlightcolor=highlight_border)
+			downloaded_frm.update()
 		
 		def out_hover(back_color, border_color):
 			hide_show(file_open_btn, show=False)
@@ -467,46 +479,46 @@ class Main(Tk):
 			info_lbl.configure(background=back_color)
 			name_lbl.configure(background=back_color)
 			title_lbl.configure(background=back_color)
-			dis_video_frm.configure(background=back_color, highlightcolor=border_color)
+			downloaded_frm.configure(background=back_color, highlightcolor=border_color)
 		
+		# Previews
 		del_image = None
 		if do_preview:
-			size = 58  # Hardcoded cuz panel itself is hardcoded
+			size = self.preview_size  # Hardcoded cuz panel itself is hardcoded
 			
 			response = requests.get(self.video.thumbnail_url)
 			img = Image.open(BytesIO(response.content)).resize((size, size))
 			img = ImageTk.PhotoImage(img)
-			self.images.append(img)
+			self.preview_images.append(img)
 			
-			preview = Label(dis_video_frm, image=self.images[-1], background='red')
+			preview = Label(downloaded_frm, image=self.preview_images[-1])
 			preview.grid(row=0, column=0, rowspan=2, padx=(5, 10))
 			preview.bind("<Button-3>", popup)
 			preview.bind("<Button-1>", lambda event: url_to_clipboard(this_url, event))
-			del_image = self.images[-1]
+			del_image = self.preview_images[-1]
 		
-		dis_video_frm.bind('<Enter>', lambda x: on_hover(highlight_color, highlight_border))
-		dis_video_frm.bind('<Leave>', lambda x: out_hover(back_color, border_color))
+		downloaded_frm.bind('<Enter>', lambda x: on_hover(highlight_color, highlight_border))
+		downloaded_frm.bind('<Leave>', lambda x: out_hover(back_color, border_color))
 		
-		file_open_btn = Button(dis_video_frm, text="📁",
+		file_open_btn = Button(downloaded_frm, text="📁", font="Arial 16",
 		                       command=lambda: subprocess.run(
-			                       fr'explorer /select,"{os.path.normpath(delete_location)}"'),
-		                       font="Arial 16")
-		file_open_btn.grid(column=4, row=0, rowspan=3)
+			                       fr'explorer /select,"{os.path.normpath(delete_location)}"'))
+		file_open_btn.grid(column=4, row=0, rowspan=3)  # I used subprocess because it highlights a file
 		
-		menu_open_btn = Button(dis_video_frm, text=":", command=lambda: popup(widget=menu_open_btn),
+		menu_open_btn = Button(downloaded_frm, text=":", command=lambda: popup(widget=menu_open_btn),
 		                       font="Arial 16 bold")
 		menu_open_btn.grid(column=5, row=0, rowspan=3)
-		self.panels_arr.append(dis_video_frm)
+		self.panels_arr.append(downloaded_frm)
 		out_hover(back_color, border_color)
 		
 		self.download_frame.update()
 		self.canvas_resize_logic()
 		self.downloading_now = False
 		
-		download_thread = threading.Thread(target=self.download_next)  # Added recently, should not break but IDK
+		download_thread = threading.Thread(target=self.download_next)  # Added recently, should not break but who knows
 		download_thread.start()
 	
-	def check_url(self, *trash):
+	def check_url(self):
 		url = self.url_var.get()
 		if url == '':
 			return
@@ -516,15 +528,16 @@ class Main(Tk):
 			if self.settings.get('print'):
 				print("\nThis is a video from a Playlist")
 			
-			if not self.settings.get('stop_spammin_these_fkin_playlists'):
-				playlist_window_thread = threading.Thread(target=self.stash_playlist_in_refridgerator, args=(url,))
+			# If this setting is on than I open playlist only with pure playlist url (2nd IF)
+			if not self.settings.get('stop_spamming_playlists'):
+				playlist_window_thread = threading.Thread(target=self.create_playlist_window, args=(url, is_playlist))
 				playlist_window_thread.start()
 				return
 		elif is_playlist == 2:
 			if self.settings.get('print'):
 				print("\nThis is a Playlist")
 			
-			playlist_window_thread = threading.Thread(target=self.stash_playlist_in_refridgerator, args=(url,))
+			playlist_window_thread = threading.Thread(target=self.create_playlist_window, args=(url, is_playlist))
 			playlist_window_thread.start()
 			return
 		
@@ -532,7 +545,7 @@ class Main(Tk):
 			video, error = slowtube.get_video(url)  # TODO: Check why is this so slow, when you input it freezes HERE !?
 			if video is None:
 				if error is not None:
-					self.create_error_panel(url, error)
+					self.create_error_panel(url, error)  # Something went wrong so I show it
 				return
 			
 			self.input_video = video
@@ -549,7 +562,7 @@ class Main(Tk):
 			self.understandable_streams = slowtube.streams_to_human(input_streams)
 			self.stream_choice.configure(values=self.understandable_streams)
 			self.streams_var.set(self.understandable_streams[-1])
-			self.input_streams = input_streams
+			self.input_streams = input_streams  # used only when downloading video manually
 		else:
 			self.this_extension_type()
 			input_streams = slowtube.filter_streams(streams, self.settings)
@@ -575,7 +588,7 @@ class Main(Tk):
 		else:
 			save_path = self.settings.get("save_path")
 		
-		# If we need audio and we have none - merge this with purely audio
+		# If we need audio and we have none - download purely audio and merge with video
 		if not (self.settings.get("this_audio") or stream.includes_audio_track):
 			audio_stream = self.video.streams.filter(only_audio=True).order_by('abr').last()
 			audio_path = audio_stream.download(output_path=save_path,
@@ -586,40 +599,40 @@ class Main(Tk):
 				print("Selected audio:", audio_stream)
 				print("Temp audio path:", audio_path)
 		
-		downloaded_path = slowtube.download_stream(stream, save_path, **self.settings, name=video_name,
-		                                           update_func=self.progress_panel_convert, merge=merge,
-		                                           audio_path=audio_path)
+		downloaded_path = slowtube.download_video(stream, save_path, **self.settings, name=video_name,
+		                                          update_func=self.progress_panel_convert, merge=merge,
+		                                          audio_path=audio_path)
 		self.create_downloaded_panel(downloaded_path, downloaded_stream=stream)
 	
 	# Settings
-	def settings_frame_gen(self):
-		def update(*trash):
+	def create_settings_window(self):
+		def update(*event):
 			if os.path.exists(save_path_var.get()):
 				self.settings['save_path'] = save_path_var.get()
 				save_path_en.configure(background=back_color)
 			else:
-				save_path_en.configure(background="#C54545")  # Highlights entry if input location is wrong
+				save_path_en.configure(background=self.disabled_color)  # Highlights entry if input location is wrong
 			
 			self.settings['print'] = debug_var.get()
 			self.settings['visual_theme'] = theme_var.get()
 			self.settings['do_quick'] = fast_var.get()
 			self.settings['quick_type'] = fast_ext_var.get()
 			self.settings['quick_quality'] = fast_quality_var.get()
-			self.settings['ender_wanna_destroiiii_da_interneeet'] = preview_var.get()
-			self.settings['stop_spammin_these_fkin_playlists'] = playlist_spam_var.get()
+			self.settings['download_prewievs'] = preview_var.get()
+			self.settings['stop_spamming_playlists'] = playlist_spam_var.get()
 			self.settings['create_new_files'] = create_new_files_var.get()
 			self.settings['choose_title'] = choose_title_var.get()
 			updates = {k: self.settings[k] for k in
 			           ('save_path', 'print', 'visual_theme', 'do_quick', 'quick_type', 'quick_quality',
-			            'ender_wanna_destroiiii_da_interneeet', "stop_spammin_these_fkin_playlists",
+			            'download_prewievs', "stop_spamming_playlists",
 			            "create_new_files", "choose_title")}
-			update_settings(updates)
+			set_settings(updates)
 			
 			if fast_var.get():
-				fast_check.configure(fg="#45C545")
+				fast_check.configure(fg=self.enabled_color)
 				self.url_var.set('')
 			else:
-				fast_check.configure(fg='#C54545')
+				fast_check.configure(fg=self.disabled_color)
 				self.streams_var.set("")
 			
 			for boolvar, boxcheck in ((debug_var, debug_choice), (preview_var, preview_choice),
@@ -627,13 +640,14 @@ class Main(Tk):
 			                          (create_new_files_var, create_new_files_choice),
 			                          (choose_title_var, choose_title_choice)):
 				if boolvar.get():
-					boxcheck.configure(fg="#45C545")
+					boxcheck.configure(fg=self.enabled_color)
 				else:
-					boxcheck.configure(fg="#C54545")
+					boxcheck.configure(fg=self.disabled_color)
 			
 			if self.settings['do_quick']:
 				for widget in (self.extension_combo, self.stream_choice, self.download_button):
-					widget.configure(state='disabled', background=df_bg_col, foreground='#C54545')
+					widget.configure(state='disabled', background=self.df_frame_background_color,
+					                 foreground=self.disabled_color)
 				self.extension_var.set(self.settings.get('quick_type'))
 				self.streams_var.set(self.settings.get("quick_quality"))
 			else:
@@ -651,14 +665,14 @@ class Main(Tk):
 		def default():
 			default_settings()
 			
-			unmodded_settings = get_settings(all=True)
-			for Bool in ('print', "do_quick", "ender_wanna_destroiiii_da_interneeet",
-			             "stop_spammin_these_fkin_playlists", "create_new_files", "choose_title"):
+			unmodded_settings = get_settings(get_all=True)
+			for Bool in ('print', "do_quick", "download_prewievs",
+			             "stop_spamming_playlists", "create_new_files", "choose_title"):
 				unmodded_settings[Bool] = unmodded_settings[Bool] == "True"
-			for Int in ('visual_theme', "fun_stats_all_videos"):
+			for Int in ('visual_theme', "downloaded_videos_stats"):
 				unmodded_settings[Int] = int(unmodded_settings[Int])
 			self.settings = unmodded_settings
-			update_settings(self.settings)
+			set_settings(self.settings)
 			
 			for var in (save_path_var, debug_var, fast_var, theme_var, fast_ext_var, fast_quality_var, preview_var,
 			            playlist_spam_var, create_new_files_var):
@@ -670,8 +684,8 @@ class Main(Tk):
 			fast_var.set(self.settings['do_quick'])
 			fast_ext_var.set(self.settings["quick_type"])
 			fast_quality_var.set(self.settings['quick_quality'])
-			preview_var.set(self.settings['ender_wanna_destroiiii_da_interneeet'])
-			playlist_spam_var.set(self.settings['stop_spammin_these_fkin_playlists'])
+			preview_var.set(self.settings['download_prewievs'])
+			playlist_spam_var.set(self.settings['stop_spamming_playlists'])
 			create_new_files_var.set(self.settings['create_new_files'])
 			choose_title_var.set(self.settings['choose_title'])
 			
@@ -679,17 +693,17 @@ class Main(Tk):
 			            playlist_spam_var, create_new_files_var, choose_title_var):
 				var.trace('w', update)
 			
-			fun_stats_lbl.configure(text=f"Всего скачано видосеков: {self.settings['fun_stats_all_videos']}")
+			fun_stats_lbl.configure(text=f"Всего скачано видосеков: {self.settings['downloaded_videos_stats']}")
 			
 			update()
 		
-		def get_quality(*trash):
+		def get_quality(*event):
 			ext = fast_ext_var.get()
 			quals = ["best", "worst"]
 			if ext == 'mp3' or ext == "webm audio":
-				quals.extend(("48kbps", "50kbps", "70kbps", "128kbps", "160kbps"))
+				quals.extend(self.possible_audio_quality)
 			else:
-				quals.extend(("144p", "240p", "360p", "480p", "720p", "1080p", "1440p", "2160p"))
+				quals.extend(self.possible_video_quality)
 			fast_quality_comb.configure(values=quals)
 			fast_quality_var.set(quals[0])
 		
@@ -715,28 +729,28 @@ class Main(Tk):
 			self.clipboard_clear()
 			self.clipboard_append(save_path_var.get())
 		
-		df_bg_col = "black"
 		back_color = "#313131"
-		text_color = "#E5E5E5"
+		text_color = self.df_text_color
 		combostyle = ttk.Style()
 		
 		combostyle.theme_use('combostyle')
 		
-		settings_frame = Toplevel(self, bg=df_bg_col, bd=0, padx=10, pady=10)
+		settings_frame = Toplevel(self, bg=self.df_frame_background_color, bd=0, padx=10, pady=10)
 		settings_frame.title("Settings")
 		settings_frame.geometry(self.wm_geometry()[self.wm_geometry().index("+"):])
 		# settings_frame.attributes('-topmost', 'true')
 		
-		default_btn = Button(settings_frame, text="Default", command=default, font=self.main_font,
+		default_btn = Button(settings_frame, text="Default", command=default, font=self.small_font,
 		                     background=back_color, foreground=text_color)
 		default_btn.grid(row=10, column=5)
 		
-		save_path_lbl = Label(settings_frame, text="Save path", font=("Comic Sans MS", 14), bg=df_bg_col, fg=text_color)
+		save_path_lbl = Label(settings_frame, text="Save path", font=(self.main_font, 14),
+		                      bg=self.df_frame_background_color, fg=text_color)
 		save_path_lbl.grid(row=0, column=1, pady=(10, 5))
 		save_path_var = StringVar()
 		save_path_var.set(self.settings['save_path'])
 		save_path_en = Entry(settings_frame, width=30, textvariable=save_path_var, background=back_color,
-		                     foreground=text_color, font=("Comic Sans MS", 14))
+		                     foreground=text_color, font=(self.main_font, 14))
 		save_path_en.grid(row=1, column=1, padx=10)
 		save_path_var.trace('w', update)
 		save_path_btn = Button(settings_frame, text='📁', background=back_color, foreground=text_color, font="Arial 18",
@@ -744,7 +758,7 @@ class Main(Tk):
 		save_path_btn.grid(row=1, column=2)
 		save_path_en.bind("<Key>", lambda x: input_clipboard(x, entry=save_path_en))
 		
-		save_path_rmb_menu = Menu(settings_frame, tearoff=0, font=("Comic Sans MS", 12))
+		save_path_rmb_menu = Menu(settings_frame, tearoff=0, font=(self.main_font, 12))
 		save_path_rmb_menu.add_command(label='Insert', command=menu_path_insert)
 		save_path_rmb_menu.add_command(label='Copy', command=menu_path_copy)
 		save_path_en.bind("<Button-3>", save_path_rmb_popup)
@@ -752,8 +766,8 @@ class Main(Tk):
 		choose_title_var = BooleanVar()
 		choose_title_choice = Checkbutton(settings_frame,
 		                                  text="Предлагать заменить\nимена видео", justify="left",
-		                                  variable=choose_title_var, fg=text_color, bg=df_bg_col,
-		                                  font=self.main_font)
+		                                  variable=choose_title_var, fg=text_color, bg=self.df_frame_background_color,
+		                                  font=self.small_font)
 		choose_title_var.set(self.settings['choose_title'])
 		choose_title_var.trace('w', update)
 		choose_title_choice.grid(row=1, column=6, padx=10, pady=10, sticky="w")
@@ -761,40 +775,44 @@ class Main(Tk):
 		create_new_files_var = BooleanVar()
 		create_new_files_choice = Checkbutton(settings_frame,
 		                                      text="Группировать плейлист\nв новую папку", justify="left",
-		                                      variable=create_new_files_var, fg=text_color, bg=df_bg_col,
-		                                      font=self.main_font)
+		                                      variable=create_new_files_var, fg=text_color,
+		                                      bg=self.df_frame_background_color,
+		                                      font=self.small_font)
 		create_new_files_var.set(self.settings['create_new_files'])
 		create_new_files_var.trace('w', update)
 		create_new_files_choice.grid(row=2, column=6, padx=10, pady=10, sticky="w")
 		
 		preview_var = BooleanVar()
 		preview_choice = Checkbutton(settings_frame, text="Добавлять превьюшки при скачке",
-		                             variable=preview_var, fg=text_color, bg=df_bg_col, font=self.main_font)
-		preview_var.set(self.settings['ender_wanna_destroiiii_da_interneeet'])
+		                             variable=preview_var, fg=text_color, bg=self.df_frame_background_color,
+		                             font=self.small_font)
+		preview_var.set(self.settings['download_prewievs'])
 		preview_var.trace('w', update)
 		preview_choice.grid(row=3, column=6, padx=10, pady=10)
 		
 		playlist_spam_var = BooleanVar()
 		playlist_spam_choice = Checkbutton(settings_frame,
 		                                   text="Не спамить плейлистом при\nссылке на видео", justify="left",
-		                                   variable=playlist_spam_var, fg=text_color, bg=df_bg_col, font=self.main_font)
-		playlist_spam_var.set(self.settings['stop_spammin_these_fkin_playlists'])
+		                                   variable=playlist_spam_var, fg=text_color, bg=self.df_frame_background_color,
+		                                   font=self.small_font)
+		playlist_spam_var.set(self.settings['stop_spamming_playlists'])
 		playlist_spam_var.trace('w', update)
 		playlist_spam_choice.grid(row=4, column=6, padx=10, pady=10, sticky="w")
 		
 		debug_var = BooleanVar()
 		debug_choice = Checkbutton(settings_frame, text="hey wanna sum spam ?", variable=debug_var, fg=text_color,
-		                           bg=df_bg_col, font=self.main_font)
+		                           bg=self.df_frame_background_color, font=self.small_font)
 		debug_var.set(self.settings['print'])
 		debug_var.trace('w', update)
 		debug_choice.grid(row=10, column=6, padx=10, pady=10, sticky='w')
 		
-		theme_lbl = Label(settings_frame, text="Мега внешний дизааааайн", font=("Comic Sans MS", 14), bg=df_bg_col,
+		theme_lbl = Label(settings_frame, text="Мега внешний дизааааайн", font=(self.main_font, 14),
+		                  bg=self.df_frame_background_color,
 		                  fg=text_color)
 		theme_lbl.grid(row=2, column=1, pady=(15, 5))
 		theme_var = IntVar()
 		theme_var.set(self.settings['visual_theme'])
-		theme_combo = ttk.Combobox(settings_frame, values=('1', '2'), state="readonly", font=("Comic Sans MS", 14),
+		theme_combo = ttk.Combobox(settings_frame, values=('1', '2'), state="readonly", font=(self.main_font, 14),
 		                           textvariable=theme_var, width=2)
 		theme_var.trace('w', update)
 		theme_combo.grid(row=3, column=1)
@@ -802,35 +820,39 @@ class Main(Tk):
 		fast_var = BooleanVar()
 		fast_var.set(self.settings['do_quick'])
 		fast_check = Checkbutton(settings_frame, text="Не выбирать чо скачивать 10 миллиардов раз",
-		                         variable=fast_var, fg=text_color, bg=df_bg_col, font=("Comic Sans Ms", 14))
+		                         variable=fast_var, fg=text_color, bg=self.df_frame_background_color,
+		                         font=(self.main_font, 14))
 		fast_check.grid(row=1, column=3, padx=(50, 10), columnspan=2)
 		fast_var.trace('w', update)
 		
-		fast_ext_lbl = Label(settings_frame, text="Формат", font=("Comic Sans MS", 14), bg=df_bg_col,
+		fast_ext_lbl = Label(settings_frame, text="Формат", font=(self.main_font, 14),
+		                     bg=self.df_frame_background_color,
 		                     fg=text_color)
 		fast_ext_lbl.grid(row=2, column=3)
 		fast_ext_var = StringVar()
 		fast_ext_var.set(self.settings['quick_type'])
 		fast_ext_var.trace('w', get_quality)
 		fast_ext_comb = ttk.Combobox(settings_frame,
-		                             values=("mp3", "webm audio", "webm video", "mp4", "mp4 (no_audio)"),
+		                             values=self.possible_extensions,
 		                             state="readonly",
-		                             font=("Comic Sans MS", 14), textvariable=fast_ext_var, width=11)
+		                             font=(self.main_font, 14), textvariable=fast_ext_var, width=11)
 		fast_ext_comb.grid(row=3, column=3)
 		
-		fast_quality_lbl = Label(settings_frame, text="Качество", font=("Comic Sans MS", 14), bg=df_bg_col,
+		fast_quality_lbl = Label(settings_frame, text="Качество", font=(self.main_font, 14),
+		                         bg=self.df_frame_background_color,
 		                         fg=text_color)
 		fast_quality_lbl.grid(row=2, column=4)
 		fast_quality_var = StringVar()
 		fast_quality_comb = ttk.Combobox(settings_frame, state="readonly",
-		                                 font=("Comic Sans MS", 14), textvariable=fast_quality_var, width=11)
+		                                 font=(self.main_font, 14), textvariable=fast_quality_var, width=11)
 		get_quality()
 		fast_quality_comb.grid(row=3, column=4)
 		fast_quality_var.set(self.settings['quick_quality'])
 		fast_quality_var.trace('w', update)
 		
-		fun_stats_lbl = Label(settings_frame, text=f"Всего скачано видосеков: {self.settings['fun_stats_all_videos']}",
-		                      font=("Comic Sans MS", 14), bg=df_bg_col, fg=text_color)
+		fun_stats_lbl = Label(settings_frame,
+		                      text=f"Всего скачано видосеков: {self.settings['downloaded_videos_stats']}",
+		                      font=(self.main_font, 14), bg=self.df_frame_background_color, fg=text_color)
 		fun_stats_lbl.grid(row=0, column=5, columnspan=10)
 		
 		update()
@@ -845,27 +867,30 @@ class Main(Tk):
 		if not os.path.exists("vanya_ez4.txt"):
 			default_settings()
 		
-		unmodded_settings = get_settings(all=True)
+		settings = get_settings(get_all=True)
 		
-		if check_missing_settings(unmodded_settings):
-			print("updated")
-			unmodded_settings = get_settings(all=True)
+		missing = check_missing_settings(settings)
+		if missing:
+			set_settings(missing)
+			settings = get_settings(get_all=True)
 		
-		for Bool in ('print', "do_quick", "ender_wanna_destroiiii_da_interneeet", "stop_spammin_these_fkin_playlists",
+		# Convert string settings to needed type
+		for Bool in ('print', "do_quick", "download_prewievs", "stop_spamming_playlists",
 		             "create_new_files", "choose_title"):
-			unmodded_settings[Bool] = (unmodded_settings[Bool] == "True")
-		for Int in ('visual_theme', "fun_stats_all_videos", "max_panels_height"):
-			unmodded_settings[Int] = int(unmodded_settings[Int])
+			settings[Bool] = (settings[Bool] == "True")
+		for Int in ('visual_theme', "downloaded_videos_stats", "max_window_height"):
+			settings[Int] = int(settings[Int])
 		
-		self.settings = unmodded_settings
+		self.settings = settings
 		self.geometry(self.settings['start_geometry'])
 		
+		# Save settings when closing the program
 		def ondestroy():
 			g = self.wm_geometry()
 			
-			update_settings(start_geometry=g[g.index('+'):],
-			                fun_stats_all_videos=self.settings['fun_stats_all_videos'] + self.downloaded_count,
-			                save_path=self.settings['save_path'], max_panels_height=self.settings["max_panels_height"])
+			set_settings(start_geometry=g[g.index('+'):],
+			             downloaded_videos_stats=self.settings['downloaded_videos_stats'] + self.downloaded_count,
+			             save_path=self.settings['save_path'], max_window_height=self.settings["max_window_height"])
 			
 			if self.settings['print']:
 				print(self.settings)
@@ -876,17 +901,26 @@ class Main(Tk):
 			print(self.settings)
 	
 	# Add video stream to download to queue
-	def add_to_queue(self, download_stream=None, input_video=None, auto_try_download=True, this_playlist_path=None):
+	def add_to_queue(self, download_stream=None, input_video=None, this_playlist_path=None):
+		"""
+		This is a function that handles all new videos to be downloaded.
+		
+		:param download_stream: Not given only when user chooses what to download manually and presses the button.
+		:param input_video: Inputted only when this function is called from playlist, where we send each video manually.
+		:param this_playlist_path: Inputted when playlist creates a new save location - new file for this exact playlist.
+		"""
 		if download_stream is None:
+			if not self.input_streams:
+				return
 			download_stream = self.input_streams[self.understandable_streams.index(self.streams_var.get())]
 		if input_video is None:
 			input_video = self.input_video
 		
-		video_name = slowtube.get_real_name(input_video, self.settings['print'])
+		video_name = slowtube.get_real_name(input_video, do_print=self.settings['print'])
 		if video_name is None:
 			video_name = input_video.title
 		elif input_video.title != video_name and self.settings.get("print"):
-			print("\n\nТот случай когда имена НЕ совпадают")
+			print("\n\nThat case when title and real name are NOT the same")
 			print(f'Title: {input_video.title}')
 			print(f'Real Title: {video_name}')
 		
@@ -899,9 +933,8 @@ class Main(Tk):
 		                            self.settings.get("full_extension")))
 		self.download_frame.update()
 		
-		if auto_try_download:
-			download_thread = threading.Thread(target=self.download_next)
-			download_thread.start()
+		download_thread = threading.Thread(target=self.download_next)
+		download_thread.start()
 	
 	def download_next(self):
 		if self.downloading_now or not self.download_queue:
@@ -909,7 +942,6 @@ class Main(Tk):
 		
 		queue_panel = self.queue_panels.popleft()
 		queue_panel.destroy()
-		del queue_panel
 		
 		video, download_stream, audio, extension, video_name, video_frame, playlist_name, real_ext = self.download_queue.popleft()
 		self.settings["noaudio"] = audio
@@ -924,7 +956,7 @@ class Main(Tk):
 		
 		self.download_selected(download_stream)
 	
-	# Magic thing I don't remember
+	# Magic thing I don't remember # TODO: delete this garbage
 	def this_extension_type(self):
 		extension = self.extension_var.get()
 		
@@ -945,23 +977,24 @@ class Main(Tk):
 		self.settings["this_audio"] = no_audio
 	
 	# Playlist download window
-	def stash_playlist_in_refridgerator(self, url: str):
-		def get_quality(*trash):
+	def create_playlist_window(self, url: str, video_type: int):
+		def set_quality(*event):
 			ext = ext_var.get()
 			quals = ["best", "worst"]
 			if ext == 'mp3' or ext == "webm audio":
-				quals.extend(("48kbps", "50kbps", "70kbps", "128kbps", "160kbps"))
+				quals.extend(self.possible_audio_quality)
 			else:
-				quals.extend(("144p", "240p", "360p", "480p", "720p", "1080p", "1440p", "2160p"))
+				quals.extend(self.possible_video_quality)
 			quality_combobox.configure(values=quals)
 			qual_var.set(quals[0])
 		
 		def download_all():
-			playlist = slowtube.get_playlist(url)
 			playlist_window.withdraw()
+			playlist = slowtube.get_playlist(url)
 			self.url_var.set('')
 			
-			real_extension_var = self.extension_var.get()
+			# What is in main download window, I save it here to revert it back after downloading playlist
+			real_extension_var = self.extension_var.get()  # TODO:
 			real_type = self.settings.get('quick_type')
 			real_qual = self.settings.get('quick_quality')
 			
@@ -969,7 +1002,7 @@ class Main(Tk):
 			self.settings["quick_quality"] = qual_var.get()
 			self.extension_var.set(ext_var.get())
 			
-			self.this_extension_type()
+			self.this_extension_type()  # I WOULDN'T SAVE THIS IF NOT THAT this_extension_type funciton
 			playlist_window.destroy()
 			
 			if self.settings.get("create_new_files"):
@@ -983,7 +1016,7 @@ class Main(Tk):
 				selected_stream = slowtube.quick_select(input_streams, self.settings)
 				self.add_to_queue(download_stream=selected_stream, input_video=video,
 				                  this_playlist_path=new_playlist_path)
-			# Should I add delay not to spam to youtube ? neva wanna look like a bot lol
+			# Should I add delay to not spam to youtube ? neva wanna look like a bot lol
 			
 			self.extension_var.set(real_extension_var)
 			self.settings['quick_type'] = real_type
@@ -1002,10 +1035,15 @@ class Main(Tk):
 			
 			self.this_extension_type()
 			video, error = slowtube.get_video(url)
+			if video is None:
+				if error is not None:
+					self.create_error_panel(url, error)  # Something went wrong so I show it
+				playlist_window.destroy()
+				return
+			
 			input_streams = slowtube.filter_streams(video.streams, self.settings)
 			selected_stream = slowtube.quick_select(input_streams, self.settings)
-			self.input_video = video
-			self.add_to_queue(download_stream=selected_stream)
+			self.add_to_queue(download_stream=selected_stream, input_video=video)
 			
 			playlist_window.destroy()
 			self.extension_var.set(real_extension_var)
@@ -1042,6 +1080,7 @@ class Main(Tk):
 				
 				self.playlist_images.clear()
 				playlist_window.destroy()
+				del im_references, video_choices
 				
 				self.extension_var.set(real_extension_var)
 				self.settings['quick_type'] = real_type
@@ -1063,45 +1102,48 @@ class Main(Tk):
 			select_video_btn.destroy()
 			download_btn = Button(playlist_window, bg=back_color, fg=text_color,
 			                      text="Download checked ones",
-			                      font=("Comic Sans MS", 14), command=download, state="disabled")
+			                      font=(self.main_font, 14), command=download, state="disabled")
 			download_btn.grid(row=1, column=0, padx=10, columnspan=2)
 			
 			def switch_all():
+				"""
+				Switches all checkboxes from ON to OFF and vice versa. 
+				"""
 				nonlocal check_state
 				for video, checkbtn in video_choices:
-					checkbtn.set(check_state)
+					checkbtn.set(not check_state)
 				
 				check_state = not check_state
 				if check_state:
-					check_all_btn.configure(fg="#45C545", text="Check all ON")
+					check_all_btn.configure(fg=self.enabled_color, text="Check all ON")
 				else:
-					check_all_btn.configure(fg="#C54545", text="Check all OFF")
+					check_all_btn.configure(fg=self.disabled_color, text="Check all OFF")
 			
-			check_state = True
-			check_all_btn = Button(playlist_window, bg=back_color, fg="#45C545",
-			                       text="Check all ON", font=("Comic Sans MS", 14), command=switch_all,
+			check_state = False
+			check_all_btn = Button(playlist_window, bg=back_color, fg=self.enabled_color,
+			                       text="Check all ON", font=(self.main_font, 14), command=switch_all,
 			                       state="disabled")
 			check_all_btn.grid(row=1, column=2, padx=10)
 			
 			# Canvas for scrolling
 			videos_canvas_frm = Frame(playlist_window, background=back_color, relief='solid')
-			videos_canvas_frm.grid(row=2, column=0, columnspan=5, pady=10, sticky="we")
+			videos_canvas_frm.grid(row=2, column=0, columnspan=5, pady=10, sticky="we")  # TODO: Fix this to resize
 			
-			videos_canvas = Canvas(videos_canvas_frm, background=df_bg_col, relief='solid', highlightthickness=0,
+			videos_canvas = Canvas(videos_canvas_frm, background=self.df_frame_background_color, relief='solid',
+			                       highlightthickness=0,
 			                       height=0, width=0)
 			videos_canvas.pack(side=LEFT, fill=BOTH, expand=True)
 			
 			videos_scrollbar = Scrollbar(videos_canvas_frm, orient=VERTICAL, command=videos_canvas.yview)
-			ignore_scrolling = False
+			ignore_scrolling = False  # Used only when already downloading
 			
 			def on_mousewheel(event: Event):
-				nonlocal ignore_scrolling
 				if ignore_scrolling:
 					return
 				videos_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 			
 			playlist_window.bind("<MouseWheel>", on_mousewheel)
-			videos_frm = Frame(videos_canvas, width=535)
+			videos_frm = Frame(videos_canvas, width=self.playlist_window_width)
 			videos_canvas.create_window((0, 0), window=videos_frm, anchor="nw")
 			videos_canvas.configure(yscrollcommand=videos_scrollbar.set)
 			
@@ -1113,11 +1155,11 @@ class Main(Tk):
 				
 				new_height = videos_frm.winfo_height()
 				
-				if new_height <= self.settings.get("max_panels_height"):
+				if new_height <= self.settings.get("max_window_height"):
 					videos_canvas.configure(height=videos_frm.winfo_height(), width=videos_frm.winfo_reqwidth())
 			
 			variant = self.settings.get('visual_theme')
-			do_preview = self.settings.get("ender_wanna_destroiiii_da_interneeet")
+			do_preview = self.settings.get("download_prewievs")
 			im_references = []
 			video_choices = []
 			
@@ -1126,11 +1168,11 @@ class Main(Tk):
 					w.configure(background=back_color)
 				frm.configure(background=back_color, highlightcolor=border_color)
 			
-			def check_fg(*trash, check_label: Label, checkvar: BooleanVar):
+			def check_fg(*event, check_label: Label, checkvar: BooleanVar):
 				if checkvar.get():
-					check_label.configure(fg="#45C545")
+					check_label.configure(fg=self.enabled_color)
 				else:
-					check_label.configure(fg='#C54545')
+					check_label.configure(fg=self.disabled_color)
 			
 			for number, video in enumerate(videos, start=1):
 				video_len = seconds_to_time(video.length)
@@ -1138,48 +1180,48 @@ class Main(Tk):
 				
 				if variant == 1:
 					if number % 2 == 0:
-						panel_back = "#425B83"
-						panel_border = "#2B3F52"
-						panel_text_color = "#F2F2F2"
-						panel_highlight_color = "#526B93"
-						panel_highlight_border = "#3B4F62"
+						panel_back = self.blue_even_back
+						panel_border = self.blue_even_border
+						panel_text_color = self.blue_even_text
+						panel_highlight_color = self.blue_even_highlight
+						panel_highlight_border = self.blue_even_highlight_border
 					else:
-						panel_back = "#6189C0"
-						panel_border = "#4E73A1"
-						panel_text_color = "#E5E5E5"
-						panel_highlight_color = "#5179B0"
-						panel_highlight_border = "#1111FF"
+						panel_back = self.blue_odd_back
+						panel_border = self.blue_odd_border
+						panel_text_color = self.blue_ood_text
+						panel_highlight_color = self.blue_odd_highlight
+						panel_highlight_border = self.blue_odd_highlight_border
 				else:
 					if number % 2 == 0:
-						panel_back = "#704192"
-						panel_border = "#602f78"
-						panel_highlight_color = "#8051a2"
-						panel_highlight_border = '#703f88'
+						panel_back = self.purple_even_back
+						panel_border = self.purple_even_border
+						panel_highlight_color = self.purple_even_highlight
+						panel_highlight_border = self.purple_even_highlight_border
 					else:
-						panel_back = "#9373b2"
-						panel_border = "#83609c"
-						panel_highlight_color = "#8363a2"
-						panel_highlight_border = '#73508c'
-					panel_text_color = "#CDCDCD"
+						panel_back = self.purple_odd_back
+						panel_border = self.purple_odd_border
+						panel_highlight_color = self.purple_odd_highlight
+						panel_highlight_border = self.purple_odd_highlight_border
+					panel_text_color = self.purple_text
 				
 				dis_video_frm = Frame(videos_frm, background=panel_back, highlightbackground=panel_border,
-				                      highlightthickness=2, height=63, width=535)
+				                      highlightthickness=2, height=63, width=self.playlist_window_width)
 				dis_video_frm.pack(fill=X)
 				dis_video_frm.grid_propagate(False)
 				
-				name_lbl = Label(dis_video_frm, text=f"{number}. {video_name}", font=("Comic Sans MS", 13),
+				name_lbl = Label(dis_video_frm, text=f"{number}. {video_name}", font=(self.main_font, 13),
 				                 foreground=panel_text_color,
 				                 background=panel_back, anchor='w')
-				name_lbl.grid(column=1, row=0, sticky='we')  # Name
+				name_lbl.grid(column=1, row=0, sticky='we')
 				
-				info_lbl = Label(dis_video_frm, text=video_len, font=("Comic Sans MS", 12, 'bold'),
+				info_lbl = Label(dis_video_frm, text=video_len, font=(self.main_font, 12, 'bold'),
 				                 foreground=panel_text_color, background=panel_back)
-				info_lbl.grid(column=1, row=1, sticky="w", columnspan=4)  # Download info
+				info_lbl.grid(column=1, row=1, sticky="w", columnspan=4)
 				
 				dis_video_frm.grid_columnconfigure(1, weight=1)
 				
 				if do_preview:
-					size = 30
+					size = 30  # TODO: Make it bigger
 					
 					response = requests.get(video.thumbnail_url)
 					img = Image.open(BytesIO(response.content)).resize((size, size))
@@ -1194,6 +1236,7 @@ class Main(Tk):
 				check = Label(dis_video_frm, fg=panel_text_color, bg=panel_back, text="✓", font="Arial 24 bold")
 				check.grid(row=0, rowspan=2, column=2)
 				
+				# Both of these are... awful... It's just a way to send every video's widgets in this loop.
 				dis_video_frm.bind('<Enter>', lambda event, pbg=panel_highlight_color, pbd=panel_highlight_border,
 				                                     dvf=dis_video_frm, ch=check, n=name_lbl,
 				                                     i=info_lbl: change_background(pbg, pbd, dvf, ch, n, i))
@@ -1201,16 +1244,16 @@ class Main(Tk):
 				                   lambda event, pbg=panel_back, pbd=panel_border, dvf=dis_video_frm, ch=check,
 				                          n=name_lbl, i=info_lbl: change_background(pbg, pbd, dvf, ch, n, i))
 				video_choices.append((video, check_var))
-				check_var.trace("w", lambda *x, c=check, cv=check_var: check_fg(check_label=c, checkvar=cv))
+				check_var.trace("w", lambda *event, c=check, cv=check_var: check_fg(check_label=c, checkvar=cv))
 				check_fg(check_label=check, checkvar=check_var)
 				
-				preview = 0
+				preview_size = 0
 				if do_preview:
-					preview = 30
+					preview_size = 30
 				
-				i = 13
-				while name_lbl.winfo_reqwidth() > 450 - preview:
-					name_lbl.configure(font=("Comic Sans MS", i))
+				i = 13  # Resize the text if it doesn't fit
+				while name_lbl.winfo_reqwidth() > self.playlist_window_width - preview_size - 50:
+					name_lbl.configure(font=(self.main_font, i))
 					i -= 1
 					playlist_window.update_idletasks()
 				
@@ -1222,7 +1265,7 @@ class Main(Tk):
 				def switch_checkbox(this_check):
 					this_check.set(not this_check.get())
 				
-				for part in parts:
+				for part in parts:  # Change BooleanVar when clicking anywhere in a form
 					part.bind("<Button-1>", lambda *event, this_check=check_var: switch_checkbox(this_check))
 				
 				playlist_window.update()
@@ -1238,81 +1281,121 @@ class Main(Tk):
 			choose_thread = threading.Thread(target=wanna_choose)
 			choose_thread.start()
 		
-		df_bg_col = "black"
-		back_color = "#313131"
-		text_color = "#E5E5E5"
+		back_color = self.df_widgets_bg_col
+		text_color = self.df_text_color
 		
-		playlist_window = Toplevel(self, bg=df_bg_col, bd=0, padx=10, pady=10, width=535)
+		playlist_window = Toplevel(self, bg=self.df_frame_background_color, bd=0, padx=10, pady=10,
+		                           width=self.playlist_window_width)
 		playlist_window.geometry(self.wm_geometry()[self.wm_geometry().index("+"):])
-		playlist_window.title("New video when 2.3 comes out")
+		playlist_window.title("Playlist")
 		
-		if "watch" in url:  # This is a video from a playlist, I can download only it
-			one_video_btn = Button(playlist_window, bg=back_color, fg=text_color, text="Nah just one video\nBozo",
-			                       font=("Comic Sans MS", 14), command=nah_download_one)
+		if video_type == 1:  # This is a video from a playlist, I can download only it.
+			one_video_btn = Button(playlist_window, bg=back_color, fg=text_color, text="Download one\nvideo",
+			                       font=(self.main_font, 14), command=nah_download_one)
 			one_video_btn.grid(row=1, column=0, padx=10)
-			one_video_btn.bind("<Enter>", lambda _: btn_glow(widget=one_video_btn, enter=True))
-			one_video_btn.bind("<Leave>", lambda _: btn_glow(widget=one_video_btn, enter=False))
 		else:
-			one_video_btn = Button()
+			one_video_btn = Button()  # Otherwise I create a dummy cuz it is ONLY a playlist, not a video from one
 		
-		all_videos_btn = Button(playlist_window, bg=back_color, fg=text_color, text="Download everything\ndaddy",
-		                        font=("Comic Sans MS", 14), command=download_all_thread)
+		all_videos_btn = Button(playlist_window, bg=back_color, fg=text_color, text="Download everything",
+		                        font=(self.main_font, 14), command=download_all_thread, height=2)
 		all_videos_btn.grid(row=1, column=1, padx=10)
 		
 		select_video_btn = Button(playlist_window, bg=back_color, fg=text_color, command=new_choose_thread,
-		                          text="I alone can choose\nwhat to download", font=("Comic Sans MS", 14))
+		                          text="I alone can choose\nwhat to download", font=(self.main_font, 14))
 		select_video_btn.grid(row=1, column=2, padx=10)
-		
-		for widget in (all_videos_btn, select_video_btn):
+		for widget in (one_video_btn, all_videos_btn, select_video_btn):
 			widget.bind("<Enter>", lambda _, w=widget: btn_glow(widget=w, enter=True))
 			widget.bind("<Leave>", lambda _, w=widget: btn_glow(widget=w, enter=False))
 		
 		combostyle = ttk.Style()
 		combostyle.theme_use('combostyle')
 		
-		desc_lbl = Label(playlist_window, bg=df_bg_col, fg=text_color, text="Dis playlist?", font=("Comic Sans MS", 14))
+		desc_lbl = Label(playlist_window, bg=self.df_frame_background_color, fg=text_color, text="Dis a playlist",
+		                 font=(self.main_font, 14))
 		desc_lbl.grid(row=0, column=0, pady=10)
 		
 		ext_var = StringVar()
-		ext_combobox = ttk.Combobox(playlist_window,
-		                            values=("mp3", "webm audio", "webm video", "mp4", "mp4 (no_audio)"),
-		                            state='readonly', font=("Comic Sans MS", 14), width=14, foreground=text_color,
-		                            textvariable=ext_var)
+		ext_combobox = ttk.Combobox(playlist_window, values=self.possible_extensions, state='readonly',
+		                            font=(self.main_font, 14), width=14, foreground=text_color, textvariable=ext_var)
 		ext_combobox.grid(row=0, column=1, padx=10)
 		
 		qual_var = StringVar()
 		quality_combobox = ttk.Combobox(playlist_window, textvariable=qual_var, state='readonly',
-		                                font=("Comic Sans MS", 14), width=14, foreground=text_color)
+		                                font=(self.main_font, 14), width=14, foreground=text_color)
 		quality_combobox.grid(row=0, column=2)
 		
-		ext_var.trace('w', get_quality)
+		ext_var.trace('w', set_quality)
 		ext_var.set(self.settings.get("quick_type"))
 		qual_var.set(self.settings.get("quick_quality"))
-		get_quality()
+		set_quality()
 		
 		self.url_var.set("")
 	
 	def canvas_resize_logic(self):
 		self.panels_frm.configure(height=self.panels_frm.winfo_reqheight())
 		
-		new_height = self.winfo_height()
+		# TODO: check, here was height(), NOT reqheight()
+		new_height = self.winfo_reqheight()
 		if self.settings.get("print"):
 			print("New height:", new_height)
 		
-		if new_height <= self.settings.get("max_panels_height"):
+		if new_height <= self.settings.get("max_window_height"):
 			self.df_canvas.configure(height=self.winfo_height(), width=self.panels_frm.winfo_reqwidth())
+			# Delete scrollbar if window fits in the screen
 			if self.df_scrollbar.winfo_manager():
 				self.df_scrollbar.pack_forget()
 		else:
+			# Otherwise add
 			if not (self.df_scrollbar.winfo_manager()):
 				self.df_scrollbar.pack(side=RIGHT, fill=Y)
 	
 	def window_resize(self, event: Event):
-		self.df_canvas.configure(scrollregion=self.df_canvas.bbox("all"))
-		# height 145 is impossible for manual resizing
+		# height 145 is impossible for manual resizing, here I check if it was a user who resized the window
 		if event.height != self.winfo_reqheight() and type(event.widget) is Main and event.height >= 145:
-			self.settings["max_panels_height"] = self.winfo_height()
+			self.settings["max_window_height"] = self.winfo_height()
 			self.canvas_resize_logic()
+		self.df_canvas.configure(scrollregion=self.df_canvas.bbox("all"))
+	
+	def init_constants(self):
+		# This function gives me "You need to use less constants" vibes (even tho most of them are colors)
+		self.df_frame_background_color = "black"
+		self.df_widgets_bg_col = "#313131"
+		self.df_border_color = "#383838"
+		self.df_text_color = "#E5E5E5"
+		
+		self.disabled_color = "#C54545"
+		self.enabled_color = "#45C545"
+		
+		self.blue_even_back = "#425B83"
+		self.blue_even_text = "#F2F2F2"
+		self.blue_even_border = "#2B3F52"
+		self.blue_even_highlight_border = "#3B4F62"
+		self.blue_even_highlight = "#526B93"
+		
+		self.blue_odd_back = "#6189C0"
+		self.blue_odd_border = "#4E73A1"
+		self.blue_odd_highlight_border = "#1111FF"
+		self.blue_ood_text = self.df_text_color
+		self.blue_odd_highlight = "#5179B0"
+		
+		self.purple_even_back = "#704192"
+		self.purple_even_highlight = "#8051a2"
+		self.purple_even_border = "#602f78"
+		self.purple_even_highlight_border = '#703f88'
+		
+		self.purple_odd_back = "#9373b2"
+		self.purple_odd_highlight = "#8363a2"
+		self.purple_odd_border = "#83609c"
+		self.purple_odd_highlight_border = '#73508c'
+		self.purple_text = "#CDCDCD"
+		
+		self.preview_size = 58
+		self.possible_extensions = ("mp3", "webm audio", "webm video", "mp4", "mp4 (no_audio)")
+		self.possible_audio_quality = ("48kbps", "50kbps", "70kbps", "128kbps", "160kbps")
+		self.possible_video_quality = ("144p", "240p", "360p", "480p", "720p", "1080p", "1440p", "2160p")
+		self.main_font = "Comic Sans MS"
+		self.small_font = (self.main_font, 12)
+		self.playlist_window_width = 535
 
 
 if __name__ == "__main__":
@@ -1320,7 +1403,7 @@ if __name__ == "__main__":
 	window.title("Python Youtube downloader")
 	
 	minigames_menu = Menu(window)
-	minigames_menu.add_command(label="Settings", command=window.settings_frame_gen)
+	minigames_menu.add_command(label="Settings", command=window.create_settings_window)
 	
 	window.config(menu=minigames_menu)
 	window.mainloop()

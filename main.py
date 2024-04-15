@@ -88,6 +88,11 @@ class Main(Tk):
 		
 		self.en_url.grid(row=1, column=2, padx=(10, 20))
 		
+		self.lag_warning_lbl = Label(df, text="Youtube lags right now so you have to wait a little bit",
+		                             font=self.small_font, bg=self.df_frame_background_color, fg=self.disabled_color)
+		self.lag_warning_lbl.grid(row=1, column=2, columnspan=3, sticky="n")
+		hide_show(self.lag_warning_lbl, show=False)
+		
 		self.extension_var = StringVar()
 		self.extension_combo = ttk.Combobox(df, values=self.possible_extensions,
 		                                    state="readonly", width=11,
@@ -529,6 +534,9 @@ class Main(Tk):
 		if url == '':
 			return
 		
+		lag_warning_event = self.after(5000, lambda: hide_show(self.lag_warning_lbl, show=True))
+		# This event will show the user that YouTube lags at the moment, so they see that everything still works
+		
 		is_playlist = slowtube.is_playlist(url)
 		if is_playlist == 1:
 			if self.settings.get('print'):
@@ -538,6 +546,9 @@ class Main(Tk):
 			if not self.settings.get('stop_spamming_playlists'):
 				playlist_window_thread = threading.Thread(target=self.create_playlist_window, args=(url, is_playlist))
 				playlist_window_thread.start()
+				
+				self.after_cancel(lag_warning_event)
+				hide_show(self.lag_warning_lbl, show=False)
 				return
 		elif is_playlist == 2:
 			if self.settings.get('print'):
@@ -545,20 +556,30 @@ class Main(Tk):
 			
 			playlist_window_thread = threading.Thread(target=self.create_playlist_window, args=(url, is_playlist))
 			playlist_window_thread.start()
+			
+			self.after_cancel(lag_warning_event)
+			hide_show(self.lag_warning_lbl, show=False)
 			return
 		
 		if self.prev_url != url:
-			video, error = slowtube.get_video(url)  # TODO: Check why is this so slow, when you input it freezes HERE !?
+			self.prev_url = url
+			video, error = slowtube.get_video(url)
 			if video is None:
 				if error is not None:
 					self.create_error_panel(url, error)  # Something went wrong so I show it
 				return
 			
-			self.input_video = video
 			streams = video.streams
-			self.prev_url = url
+			
+			self.after_cancel(lag_warning_event)
+			hide_show(self.lag_warning_lbl, show=False)
+			if self.prev_url != url:
+				return  # I check it the second time in case the user lags, and they had changed video url while getting a response
+			self.input_video = video
 		else:
 			streams = self.input_video.streams
+			self.after_cancel(lag_warning_event)
+			hide_show(self.lag_warning_lbl, show=False)
 		
 		if self.settings['do_quick'] is False:
 			if self.extension_var.get() is None:

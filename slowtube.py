@@ -244,7 +244,7 @@ def download_video(stream: pytube.streams.Stream, full_path, **settings) -> str:
 	elif f".{final_extension}" != starting_extension:
 		convert_to_extension(file_path=real_path, update_func=settings.get("update_func"),
 		                     final_extension=final_extension, do_print=settings.get("print"), stream=stream)
-		real_path = real_path[:real_path.index('.') + 1] + final_extension  # TODO: check if it works, I changed it
+		real_path = real_path[:real_path.index('.') + 1] + final_extension
 	
 	return real_path
 
@@ -286,8 +286,7 @@ def quick_select(streams: pytube.query.StreamQuery, quick_quality, quick_type, s
 		print("\nThere is no this quality, the closest is:")
 	
 	minres = streams.first()
-	mindif = float(
-		"inf")  # TODO: check how it works, it was -inf, which is... broken.. check with nonexistant qualities
+	mindif = float("inf")
 	for stream in streams:
 		res = res_to_num(stream.resolution)
 		dif = fabs(n - res)

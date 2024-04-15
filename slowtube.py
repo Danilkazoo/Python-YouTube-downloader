@@ -101,17 +101,16 @@ def get_real_name(video: pytube.YouTube, do_print: bool) -> str:
 		return path3
 
 
-def remove_copies(streams: pytube.query.StreamQuery, prioritise_progressive=False,
-                  prioritise_webm=False) -> pytube.query.StreamQuery:
+def remove_copies(streams: pytube.query.StreamQuery, prioritise_progressive=False) -> pytube.query.StreamQuery:
 	"""
 	A video can have multiple version of same quality, like, 480p in both .webm and .mp4.
 	:param streams: What streams.
-	:param prioritise_progressive: Progressive streams are .mp4 ones
-	:param prioritise_webm: ...
+	:param prioritise_progressive: Progressive streams are .mp4 with audio.
 	:return: Streams without copies, chosen by priorities.
 	"""
 	possible_resolutions = ("144p", "240p", "360p", "480p", "720p", "1080p", "1440p", "2160p")
 	ret_streams = []
+	prioritise_webm = not prioritise_progressive  # .webm is always better except when you download mp4 with audio
 	
 	for resolution in possible_resolutions:
 		this_resolution_streams = []
@@ -136,29 +135,59 @@ def remove_copies(streams: pytube.query.StreamQuery, prioritise_progressive=Fals
 	return pytube.StreamQuery(ret_streams)
 
 
-def filter_streams(streams: pytube.query.StreamQuery, settings: dict) -> pytube.query.StreamQuery:
+def filter_extension_type(filter_extension_name: str):
+	"""
+	Used in filter_streams to get what is the target type of video.
+	
+	:param filter_extension_name: What to filter - for example, WEBM AUDIO, or WEBM VIDEO
+	:return: 2 values:
+	Extension, only type of needed file - webm/mp4/mp3
+	Audio - if we need a video or audio format
+	"""
+	
+	if filter_extension_name == "mp4 (no_audio)":
+		no_audio = True
+		extension = "mp4"
+	elif filter_extension_name == "mp4":
+		no_audio = False
+		extension = "mp4"
+	elif filter_extension_name == "webm video" or filter_extension_name == "webm audio":
+		no_audio = False
+		extension = "webm"
+	elif filter_extension_name == "mp3":
+		no_audio = False
+		extension = "mp3"
+	
+	return extension, no_audio
+
+
+def filter_streams(streams: pytube.query.StreamQuery, full_extension: str, settings: dict) -> pytube.query.StreamQuery:
+	"""
+	Sorts a list of all streams from a video and returns only needed ones.
+	:param streams: A list all streams of a video
+	:param full_extension: Full name of what to you need - WEBM AUDIO, or mp3
+	:param settings: settings from a class, only used for printing actually
+	:return: Filtered streams with only needed streams
+	"""
 	if settings.get("print"):
 		print("\n\nSettings:", settings)
 		print("\nStarting streams:")
 		print(*streams.order_by("itag"), "", sep="\n")
 	
-	extension = settings.get("this_extension")
-	if extension == "mp3" or settings.get("full_extension") == "webm audio":
+	extension, no_audio = filter_extension_type(full_extension)
+	if extension == "mp3" or full_extension == "webm audio":
 		streams = streams.filter(only_audio=True).order_by('abr')  # Only audio remains
 		if settings.get("print"):
 			print("\nResult streams:")
 			print(*streams, sep="\n")
 		return streams
 	
-	if settings.get("this_audio"):
-		# No audio
+	if no_audio:
 		videos = streams.filter(adaptive=True, only_video=True)
 	else:
-		# With audio
 		videos = streams.filter(type="video")
 	
-	videos = remove_copies(videos, prioritise_progressive=not settings.get("this_audio"),
-	                       prioritise_webm=extension == "webm")
+	videos = remove_copies(videos, prioritise_progressive=full_extension == "mp4")
 	
 	if settings.get("print"):
 		print("\nResult streams:")
@@ -220,19 +249,17 @@ def download_video(stream: pytube.streams.Stream, full_path, **settings) -> str:
 	return real_path
 
 
-def quick_select(streams: pytube.query.StreamQuery, settings: dict) -> pytube.streams.Stream:
+def quick_select(streams: pytube.query.StreamQuery, quick_quality, quick_type, settings: dict) -> pytube.streams.Stream:
 	"""
 	Selects a single stream out of a list of streams, based on provided settings.
 	"""
-	quality = settings.get("quick_quality")
-	extension = settings.get("this_extension")
 	
-	if quality == "best":
+	if quick_quality == "best":
 		return streams.last()
-	elif quality == "worst":
+	elif quick_quality == "worst":
 		return streams.first()
 	
-	if extension == "mp4" or settings.get("real_extension") == "webm video":
+	if quick_type == "mp4" or quick_type == "webm video":
 		this_type = "video"
 	else:
 		this_type = "audio"
@@ -246,15 +273,15 @@ def quick_select(streams: pytube.query.StreamQuery, settings: dict) -> pytube.st
 	
 	# Trying to get video by targeted quality  # TODO: add fps, also add fps to nearby check
 	if this_type == "video":
-		temp = streams.filter(resolution=quality).last()
+		temp = streams.filter(resolution=quick_quality).last()
 		if temp:
 			return temp
 	else:
-		temp = streams.filter(abr=quality).last()
+		temp = streams.filter(abr=quick_quality).last()
 		if temp:
 			return temp
 	
-	n = res_to_num(quality)
+	n = res_to_num(quick_quality)
 	if settings.get('print'):
 		print("\nThere is no this quality, the closest is:")
 	

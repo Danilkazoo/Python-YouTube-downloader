@@ -146,9 +146,9 @@ class Main(Tk):
 		return df
 	
 	# Gray panels for videos in queue
-	def create_queue_panel(self, name, audio, extension, this_video, this_stream, playlist_name, ext_type):
+	def create_queue_panel(self, name, this_video, this_stream, playlist_name, ext_type):
 		"""
-		All this input information is used mostly to find
+		All this input information is used mostly to find video in a queue to delete it.
 		"""
 		
 		def on_hover(*event):
@@ -162,11 +162,18 @@ class Main(Tk):
 			This function deletes both this frame, AND this video overall frame, including from all queues.
 			So I use the most information about this video to be sure (it won't affect speed that much)
 			"""
-			this_find = (this_video, this_stream, audio, extension, name, this_video_frame, playlist_name, ext_type)
+			this_find = (this_video, this_stream, name, this_video_frame, playlist_name, ext_type)
+			if self.settings.get("print"):
+				print(f"Queue panels before removing: {len(self.queue_panels)}")
+				print(f"Queue videos before removing: {len(self.download_queue)}")
 			self.queue_panels.remove(frm)
 			self.download_queue.remove(this_find)
 			video_frm.destroy()
 			self.canvas_resize_logic()
+			
+			if self.settings.get("print"):
+				print(f"Queue panels after removing: {len(self.queue_panels)}")
+				print(f"Queue videos after removing: {len(self.download_queue)}")
 		
 		# Panels should have alternating colors
 		if len(self.panels_frm.winfo_children()) % 2:
@@ -187,11 +194,8 @@ class Main(Tk):
 		# Info about video in queue
 		Label(queue_frm, text=name, font=(self.main_font, 16, 'bold'), fg=text_color,
 		      bg=back_color, justify="left").grid(row=0, column=0, columnspan=4)
-		Label(queue_frm, text=extension, font=(self.main_font, 14, 'bold'), fg=text_color, bg=back_color,
+		Label(queue_frm, text=ext_type, font=(self.main_font, 14, 'bold'), fg=text_color, bg=back_color,
 		      justify='left').grid(row=1, column=0, columnspan=4)
-		if audio:
-			Label(queue_frm, text="(no audio)", font=(self.main_font, 14, 'bold'), fg=text_color, bg=back_color,
-			      justify='right').grid(row=1, column=1)
 		
 		rem_btn = Button(queue_frm, text="X", font="Arial 20 bold",
 		                 command=lambda: del_this(queue_frm, this_video_frame),
@@ -366,7 +370,7 @@ class Main(Tk):
 		name_lbl.grid(column=2, row=0, sticky='we', columnspan=4)
 		
 		info_lbl = Label(downloaded_frm,
-		                 text=f"{video_len}  -  {self.full_extension}  -  {this_quality}  -  {file_size:.2f}Mb",
+		                 text=f"{video_len}  -  {self.full_video_type_name}  -  {this_quality}  -  {file_size:.2f}Mb",
 		                 font=(self.main_font, 13, 'bold'), foreground=text_color, background=back_color)
 		info_lbl.grid(column=2, row=1, sticky="w", columnspan=20)  # Download info
 		
@@ -559,22 +563,22 @@ class Main(Tk):
 		if self.settings['do_quick'] is False:
 			if self.extension_var.get() is None:
 				return
-			self.this_extension_type()
-			input_streams = slowtube.filter_streams(streams, self.settings)
+			
+			input_streams = slowtube.filter_streams(streams, self.extension_var.get(), self.settings)
 			self.understandable_streams = slowtube.streams_to_human(input_streams)
 			self.stream_choice.configure(values=self.understandable_streams)
 			self.streams_var.set(self.understandable_streams[-1])
 			self.input_streams = input_streams  # used only when downloading video manually
 		else:
-			self.this_extension_type()
-			input_streams = slowtube.filter_streams(streams, self.settings)
-			selected_stream = slowtube.quick_select(input_streams, self.settings)
+			input_streams = slowtube.filter_streams(streams, self.settings.get("quick_type"), self.settings)
+			selected_stream = slowtube.quick_select(input_streams, self.settings.get("quick_quality"),
+			                                        self.settings.get("quick_type"), self.settings)
 			self.en_url.delete(0, 'end')
 			
 			if self.settings.get("print"):
 				print("\nSelected stream:", selected_stream)
 			
-			self.add_to_queue(download_stream=selected_stream)
+			self.add_to_queue(download_stream=selected_stream, download_type_name=self.settings.get("quick_type"))
 	
 	def download_selected(self, stream):
 		video_name = self.video_name
@@ -590,8 +594,8 @@ class Main(Tk):
 		else:
 			save_path = self.settings.get("save_path")
 		
-		# If we need audio and we have none - download purely audio and merge with video
-		if not (self.settings.get("this_audio") or stream.includes_audio_track):
+		# If we need audio and we have only video - download purely audio and merge with video
+		if not self.settings.get("no_audio") and not stream.includes_audio_track:
 			audio_stream = self.video.streams.filter(only_audio=True).order_by('abr').last()
 			audio_path = audio_stream.download(output_path=save_path,
 			                                   filename=f"{pv_sanitize(video_name, replacement_text=' ')} only_audio_sussy_baka.webm")
@@ -917,11 +921,12 @@ class Main(Tk):
 			print(self.settings)
 	
 	# Add video stream to download to queue
-	def add_to_queue(self, download_stream=None, input_video=None, this_playlist_path=None):
+	def add_to_queue(self, download_stream=None, download_type_name=None, input_video=None, this_playlist_path=None):
 		"""
 		This is a function that handles all new videos to be downloaded.
 		
 		:param download_stream: Not given only when user chooses what to download manually and presses the button.
+		:param download_type_name: Full name of download type (from self.possible_extensions) - for example, WEBM AUDIO.
 		:param input_video: Inputted only when this function is called from playlist, where we send each video manually.
 		:param this_playlist_path: Inputted when playlist creates a new save location - new file for this exact playlist.
 		"""
@@ -929,6 +934,7 @@ class Main(Tk):
 			if not self.input_streams:
 				return
 			download_stream = self.input_streams[self.understandable_streams.index(self.streams_var.get())]
+			download_type_name = self.extension_var.get()
 		if input_video is None:
 			input_video = self.input_video
 		
@@ -940,57 +946,37 @@ class Main(Tk):
 			print(f'Title: {input_video.title}')
 			print(f'Real Title: {video_name}')
 		
-		panel, this_video_frame = self.create_queue_panel(video_name, self.settings["this_audio"],
-		                                                  self.settings["this_extension"], input_video, download_stream,
-		                                                  this_playlist_path, self.settings.get("full_extension"))
+		panel, this_video_frame = self.create_queue_panel(video_name, input_video, download_stream, this_playlist_path,
+		                                                  download_type_name)
 		self.queue_panels.append(panel)
-		self.download_queue.append((input_video, download_stream, self.settings["this_audio"],
-		                            self.settings["this_extension"], video_name, this_video_frame, this_playlist_path,
-		                            self.settings.get("full_extension")))
+		self.download_queue.append((input_video, download_stream, video_name,
+		                            this_video_frame, this_playlist_path, download_type_name))
 		self.download_frame.update()
 		
 		download_thread = threading.Thread(target=self.download_next)
 		download_thread.start()
 	
 	def download_next(self):
+		"""
+		Download next video in a stored queue
+		"""
 		if self.downloading_now or not self.download_queue:
 			return
 		
 		queue_panel = self.queue_panels.popleft()
 		queue_panel.destroy()
 		
-		video, download_stream, audio, extension, video_name, video_frame, playlist_name, real_ext = self.download_queue.popleft()
-		self.settings["noaudio"] = audio
-		self.settings["extension"] = extension
+		video, download_stream, video_name, video_frame, playlist_name, full_video_type = self.download_queue.popleft()
+		self.settings["extension"], self.settings["no_audio"] = slowtube.filter_extension_type(full_video_type)
 		self.video = video
 		self.downloading_now = True
 		self.video_name = video_name
 		self.this_video_frame = video_frame
 		self.this_playlist_save_path = playlist_name
-		self.full_extension = real_ext
+		self.full_video_type_name = full_video_type
 		self.video_title = video.title
 		
 		self.download_selected(download_stream)
-	
-	# Magic thing I don't remember # TODO: delete this garbage
-	def this_extension_type(self):
-		extension = self.extension_var.get()
-		
-		if not extension:
-			return
-		
-		self.settings["full_extension"] = extension
-		if extension == "mp4 (no_audio)":
-			no_audio = True
-			extension = "mp4"
-		elif extension == "webm video" or extension == "webm audio":
-			no_audio = False
-			extension = "webm"
-		else:
-			no_audio = False
-		
-		self.settings["this_extension"] = extension
-		self.settings["this_audio"] = no_audio
 	
 	# Playlist download window
 	def create_playlist_window(self, url: str, video_type: int):
@@ -1009,16 +995,6 @@ class Main(Tk):
 			playlist = slowtube.get_playlist(url)
 			self.url_var.set('')
 			
-			# What is in main download window, I save it here to revert it back after downloading playlist
-			real_extension_var = self.extension_var.get()  # TODO:
-			real_type = self.settings.get('quick_type')
-			real_qual = self.settings.get('quick_quality')
-			
-			self.settings["quick_type"] = ext_var.get()
-			self.settings["quick_quality"] = qual_var.get()
-			self.extension_var.set(ext_var.get())
-			
-			self.this_extension_type()  # I WOULDN'T SAVE THIS IF NOT THAT this_extension_type funciton
 			playlist_window.destroy()
 			
 			if self.settings.get("create_new_files"):
@@ -1027,29 +1003,16 @@ class Main(Tk):
 			else:
 				new_playlist_path = None
 			
-			for video in playlist.videos_generator():
-				input_streams = slowtube.filter_streams(video.streams, self.settings)
-				selected_stream = slowtube.quick_select(input_streams, self.settings)
-				self.add_to_queue(download_stream=selected_stream, input_video=video,
-				                  this_playlist_path=new_playlist_path)
 			# Should I add delay to not spam to youtube ? neva wanna look like a bot lol
-			
-			self.extension_var.set(real_extension_var)
-			self.settings['quick_type'] = real_type
-			self.settings['quick_quality'] = real_qual
+			for video in playlist.videos_generator():
+				input_streams = slowtube.filter_streams(video.streams, ext_var.get(), self.settings)
+				selected_stream = slowtube.quick_select(input_streams, qual_var, ext_var, self.settings)
+				self.add_to_queue(download_stream=selected_stream, input_video=video,
+				                  this_playlist_path=new_playlist_path, download_type_name=ext_var.get())
 		
 		def nah_download_one():
 			playlist_window.withdraw()
 			
-			real_extension_var = self.extension_var.get()
-			real_type = self.settings.get('quick_type')
-			real_qual = self.settings.get('quick_quality')
-			
-			self.settings["quick_type"] = ext_var.get()
-			self.settings["quick_quality"] = qual_var.get()
-			self.extension_var.set(ext_var.get())
-			
-			self.this_extension_type()
 			video, error = slowtube.get_video(url)
 			if video is None:
 				if error is not None:
@@ -1057,28 +1020,16 @@ class Main(Tk):
 				playlist_window.destroy()
 				return
 			
-			input_streams = slowtube.filter_streams(video.streams, self.settings)
-			selected_stream = slowtube.quick_select(input_streams, self.settings)
-			self.add_to_queue(download_stream=selected_stream, input_video=video)
+			input_streams = slowtube.filter_streams(video.streams, ext_var.get(), self.settings)
+			selected_stream = slowtube.quick_select(input_streams, qual_var, ext_var, self.settings)
+			self.add_to_queue(download_stream=selected_stream, input_video=video, download_type_name=ext_var.get())
 			
 			playlist_window.destroy()
-			self.extension_var.set(real_extension_var)
-			self.settings['quick_type'] = real_type
-			self.settings['quick_quality'] = real_qual
 		
 		def wanna_choose():
 			def download():
 				nonlocal ignore_scrolling
 				ignore_scrolling = True
-				real_extension_var = self.extension_var.get()
-				real_type = self.settings.get('quick_type')
-				real_qual = self.settings.get('quick_quality')
-				
-				self.settings["quick_type"] = ext_var.get()
-				self.settings["quick_quality"] = qual_var.get()
-				self.extension_var.set(ext_var.get())
-				
-				self.this_extension_type()
 				playlist_window.withdraw()
 				
 				if self.settings.get("create_new_files"):
@@ -1089,18 +1040,14 @@ class Main(Tk):
 				
 				for video, do_download in video_choices:
 					if do_download.get():
-						input_streams = slowtube.filter_streams(video.streams, self.settings)
-						selected_stream = slowtube.quick_select(input_streams, self.settings)
+						input_streams = slowtube.filter_streams(video.streams, ext_var.get(), self.settings)
+						selected_stream = slowtube.quick_select(input_streams, qual_var, ext_var, self.settings)
 						self.add_to_queue(download_stream=selected_stream, input_video=video,
-						                  this_playlist_path=new_playlist_path)
+						                  this_playlist_path=new_playlist_path, download_type_name=ext_var.get())
 				
 				self.playlist_images.clear()
 				playlist_window.destroy()
 				del im_references, video_choices
-				
-				self.extension_var.set(real_extension_var)
-				self.settings['quick_type'] = real_type
-				self.settings['quick_quality'] = real_qual
 			
 			def onclose():
 				self.overrideredirect(False)
@@ -1408,6 +1355,7 @@ class Main(Tk):
 		
 		self.preview_size = 58
 		self.possible_extensions = ("mp3", "webm audio", "webm video", "mp4", "mp4 (no_audio)")
+		#  Just "mp4" has both audio and video tracks, I'll need to rename it
 		self.possible_audio_quality = ("48kbps", "50kbps", "70kbps", "128kbps", "160kbps")
 		self.possible_video_quality = ("144p", "240p", "360p", "480p", "720p", "1080p", "1440p", "2160p")
 		self.main_font = "Comic Sans MS"

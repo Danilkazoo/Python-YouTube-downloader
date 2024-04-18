@@ -7,31 +7,37 @@ from pathvalidate import sanitize_filename as pv_sanitize
 from pytube.exceptions import AgeRestrictedError
 
 
-def convert_to_extension(file_path: str, update_func, final_extension, do_print, stream: pytube.Stream):
+def convert_to_extension(file_path: str, update_func, final_extension, do_print, stream: pytube.Stream) -> str:
 	"""
 	Converts already downloaded file to another extension.
-	:param file_path: A path to a file.
+	:param file_path: A path to a file to convert.
 	:param update_func: What function to call when conversion progresses.
 	:param final_extension: What is a desired extension.
 	:param do_print: Should it print
 	:param stream: Downloaded video stream.
+	:return: Real path of a new converted file.
 	"""
 	
-	path, ext = os.path.splitext(file_path)
-	if ext == f".{final_extension}":
+	path, curr_ext = os.path.splitext(file_path)
+	if curr_ext == f".{final_extension}":
 		print("Somehow I don't need to convert ? Something's broken.")
 		return
 	
+	path = path[:-10]  # To files that I will convert I add "to_convert"
+	
 	if final_extension == "mp3":
 		abr = stream.abr[:-4]
-		cmd = f'ffmpeg -i "{file_path}" -vn -ab {abr}k "{path}.{final_extension}"'
+		return_path = f"{path}.{final_extension}"
+		cmd = f'ffmpeg -i "{file_path}" -vn -ab {abr}k "{return_path}"'
 	elif final_extension == "mp4":
-		cmd = f'ffmpeg -i "{file_path}" -c copy "{path}.{final_extension}"'
-	elif final_extension == "webm" and ext == ".mp4":  # .webm TO .mp4 is a lot harder and slower, and needs this.
-		cmd = fr'ffmpeg -i "{file_path}" -q:v 10 -c:v libvpx -c:a libvorbis "{path}.webm"'
+		return_path = f"{path}.{final_extension}"
+		cmd = f'ffmpeg -i "{file_path}" -c copy "{return_path}"'
+	elif final_extension == "webm" and curr_ext == ".mp4":  # .webm TO .mp4 is a lot harder and slower, and needs this.
+		return_path = f"{path}.webm"
+		cmd = fr'ffmpeg -i "{file_path}" -q:v 10 -c:v libvpx -c:a libvorbis "{return_path}"'
 	else:
 		print("Incorrect extensions, go away")
-		return
+		return ""
 	
 	if do_print:
 		print("Resultant cmd:\n", cmd)
@@ -54,6 +60,7 @@ def convert_to_extension(file_path: str, update_func, final_extension, do_print,
 			update_func(converted_time)
 	
 	os.remove(file_path)
+	return return_path
 
 
 def get_real_name(video: pytube.YouTube, do_print: bool) -> str:
@@ -141,24 +148,17 @@ def filter_extension_type(filter_extension_name: str):
 	
 	:param filter_extension_name: What to filter - for example, WEBM AUDIO, or WEBM VIDEO
 	:return: 2 values:
-	Extension, only type of needed file - webm/mp4/mp3
-	Audio - if we need a video or audio format
+	Extension - only type of needed file - webm/mp4/mp3
+	Audio_type - what type are we downlaoding video/audio/both
 	"""
 	
-	if filter_extension_name == "mp4 (no_audio)":
-		no_audio = True
-		extension = "mp4"
-	elif filter_extension_name == "mp4":
-		no_audio = False
-		extension = "mp4"
-	elif filter_extension_name == "webm video" or filter_extension_name == "webm audio":
-		no_audio = False
-		extension = "webm"
-	elif filter_extension_name == "mp3":
-		no_audio = False
+	if filter_extension_name == "mp3":
+		audio_type = "audio"
 		extension = "mp3"
+	else:
+		extension, audio_type = filter_extension_name.split()
 	
-	return extension, no_audio
+	return extension, audio_type
 
 
 def filter_streams(streams: pytube.query.StreamQuery, full_extension: str, settings: dict) -> pytube.query.StreamQuery:
@@ -174,20 +174,19 @@ def filter_streams(streams: pytube.query.StreamQuery, full_extension: str, setti
 		print("\nStarting streams:")
 		print(*streams.order_by("itag"), "", sep="\n")
 	
-	extension, no_audio = filter_extension_type(full_extension)
-	if extension == "mp3" or full_extension == "webm audio":
+	extension, download_type = filter_extension_type(full_extension)
+	if download_type == "audio":
 		streams = streams.filter(only_audio=True).order_by('abr')  # Only audio remains
 		if settings.get("print"):
 			print("\nResult streams:")
 			print(*streams, sep="\n")
 		return streams
-	
-	if no_audio:
-		videos = streams.filter(adaptive=True, only_video=True)
-	else:
+	elif download_type == "both":
 		videos = streams.filter(type="video")
+	else:
+		videos = streams.filter(adaptive=True, only_video=True)
 	
-	videos = remove_copies(videos, prioritise_progressive=full_extension == "mp4")
+	videos = remove_copies(videos, prioritise_progressive=full_extension == "mp4 both")
 	
 	if settings.get("print"):
 		print("\nResult streams:")
@@ -198,19 +197,23 @@ def filter_streams(streams: pytube.query.StreamQuery, full_extension: str, setti
 
 def download_video(stream: pytube.streams.Stream, full_path, **settings) -> str:
 	"""
+	:param stream: What stream to download, it should be already be chosen.
+	:param full_path: Full path where to download, exactly - what file.
+	:param settings: Some settings to download, mainly download_type, print, name and extension
 	:return: Return real path of a downloaded file.
 	"""
 	
 	save_path = full_path  # It is here to send a real path, not in settings save_path in settings
 	final_extension = settings.get("extension")
 	start_name = settings.get("name")
+	starting_extension = os.path.splitext(stream.get_file_path())[1]
 	
 	final_name = pv_sanitize(start_name, replacement_text=' ')
 	prefix_name = final_name
-	if settings.get('merge'):
+	if settings.get('download_type') == "both":
 		final_name += "only_video_baka"
-	
-	starting_extension = os.path.splitext(stream.get_file_path())[1]
+	elif f".{final_extension}" != starting_extension:
+		final_name += "to_convert"
 	
 	# Adding numbers to a file's name, so it doesn't overlap with existing ones
 	prefix = None
@@ -224,6 +227,7 @@ def download_video(stream: pytube.streams.Stream, full_path, **settings) -> str:
 		print(f"\n\nDownloading {streams_to_human([stream])[0]} = {stream}")
 		print("To:", stream.get_file_path(filename=f"{final_name}.{final_extension}", output_path=save_path,
 		                                  filename_prefix=prefix))
+		print(f"Download extension: {settings.get('extension')}\nDownload type: {settings.get('download_type')}")
 		print(f"Settings: {settings}")
 	
 	real_path = stream.download(output_path=save_path, filename_prefix=prefix,
@@ -235,16 +239,13 @@ def download_video(stream: pytube.streams.Stream, full_path, **settings) -> str:
 		print("Perhaps file name has some symbols that windows doesn't like")
 		print(fr"Was : {save_path}\{prefix}{start_name}{starting_extension}")
 		print(r"Real:", real_path)
-		print(''.join(
-			set(real_path).symmetric_difference(fr"{save_path}\{prefix}{start_name}{final_extension}")))  # Why...
 	
-	if settings.get('merge'):
+	if settings.get('download_type') == "both":
 		real_path = merge_audio_video(real_path, settings.get("audio_path"), settings.get("update_func"),
 		                              settings.get("print"), final_extension)
 	elif f".{final_extension}" != starting_extension:
-		convert_to_extension(file_path=real_path, update_func=settings.get("update_func"),
-		                     final_extension=final_extension, do_print=settings.get("print"), stream=stream)
-		real_path = real_path[:real_path.index('.') + 1] + final_extension
+		real_path = convert_to_extension(file_path=real_path, update_func=settings.get("update_func"),
+		                                 final_extension=final_extension, do_print=settings.get("print"), stream=stream)
 	
 	return real_path
 
@@ -252,6 +253,7 @@ def download_video(stream: pytube.streams.Stream, full_path, **settings) -> str:
 def quick_select(streams: pytube.query.StreamQuery, quick_quality, quick_type, settings: dict) -> pytube.streams.Stream:
 	"""
 	Selects a single stream out of a list of streams, based on provided settings.
+	Input streams should already be filtered by type.
 	"""
 	
 	if quick_quality == "best":
@@ -259,10 +261,7 @@ def quick_select(streams: pytube.query.StreamQuery, quick_quality, quick_type, s
 	elif quick_quality == "worst":
 		return streams.first()
 	
-	if quick_type == "mp4" or quick_type == "webm video":
-		this_type = "video"
-	else:
-		this_type = "audio"
+	_, this_type = filter_extension_type(quick_type)
 	
 	# Turn resolution to simple int
 	def res_to_num(res: str) -> int:
@@ -355,21 +354,22 @@ def get_playlist(url: str):
 	return pytube.Playlist(url)
 
 
-def merge_audio_video(video_path: str, audio_path: str, update_func, do_print, file_format) -> str:
+def merge_audio_video(video_path: str, audio_path: str, update_func, do_print, result_file_format) -> str:
 	"""
 	Merges two files - one with audio only, and one with only video.
 	:return: Path of a final file.
 	"""
-	path, ext = os.path.splitext(video_path)
+	path, curr_ext = os.path.splitext(video_path)
 	path = path[:-15]  # 15 is len of (audio_only_sussy_baka) I add to differentiate merge files
 	
-	# mp4 to webm is special in it's blasphemy
-	if file_format == "webm" and ext == ".mp4":
+	# mp4 to webm is special in it's blasphemy, it is a lot harder to convert, and needs additional ffmpeg "submodule"
+	if result_file_format == "webm" and curr_ext == ".mp4":
 		cmd = fr'ffmpeg -i "{video_path}" -i "{audio_path}" -q:v 10 -c:v libvpx -c:a libvorbis "{path}.webm"'
 	else:
-		cmd = rf'ffmpeg -i "{video_path}" -i "{audio_path}" -c copy "{path}.{file_format}"'
+		cmd = rf'ffmpeg -i "{video_path}" -i "{audio_path}" -c copy "{path}.{result_file_format}"'
 	
 	if do_print:
+		print("We need to do a merge")
 		print(f"Resultant cmd:\n{cmd}")
 	
 	process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, text=True,
@@ -391,7 +391,7 @@ def merge_audio_video(video_path: str, audio_path: str, update_func, do_print, f
 	
 	os.remove(video_path)
 	os.remove(audio_path)
-	return f"{path}.{file_format}"
+	return f"{path}.{result_file_format}"
 
 
 def sanitize_playlist_name(name) -> str:

@@ -383,7 +383,7 @@ class Main(Tk):
 		
 		# Interactions behaviour
 		def del_command(path, del_image, dis_frame, this_video_frm):
-			if not os.path.exists(path):
+			if not os.path.exists(path) and self.settings.get("print"):
 				print("Good attempt to delete nonexistent file")
 			else:
 				os.remove(path)
@@ -607,7 +607,6 @@ class Main(Tk):
 		self.create_progress_panel()
 		self.video.register_on_progress_callback(self.progress_panel_donwloading)
 		
-		merge = False
 		audio_path = None
 		
 		if self.this_playlist_save_path:
@@ -616,19 +615,18 @@ class Main(Tk):
 			save_path = self.settings.get("save_path")
 		
 		# If we need audio and we have only video - download purely audio and merge with video
-		if not self.settings.get("no_audio") and not stream.includes_audio_track:
+		if self.settings.get("download_type") == "both":
 			audio_stream = self.video.streams.filter(only_audio=True).order_by('abr').last()
 			audio_path = audio_stream.download(output_path=save_path,
 			                                   filename=f"{pv_sanitize(video_name, replacement_text=' ')} only_audio_sussy_baka.webm")
-			merge = True
+			
 			if self.settings.get('print'):
 				print("\nWe need to merge")
 				print("Selected audio:", audio_stream)
 				print("Temp audio path:", audio_path)
 		
 		downloaded_path = slowtube.download_video(stream, save_path, **self.settings, name=video_name,
-		                                          update_func=self.progress_panel_convert, merge=merge,
-		                                          audio_path=audio_path)
+		                                          update_func=self.progress_panel_convert, audio_path=audio_path)
 		self.create_downloaded_panel(downloaded_path, downloaded_stream=stream)
 	
 	# Settings
@@ -726,7 +724,8 @@ class Main(Tk):
 		def get_quality(*event):
 			ext = fast_ext_var.get()
 			quals = ["best", "worst"]
-			if ext == 'mp3' or ext == "webm audio":
+			_, download_type = slowtube.filter_extension_type(ext)
+			if download_type == "audio":
 				quals.extend(self.possible_audio_quality)
 			else:
 				quals.extend(self.possible_video_quality)
@@ -988,7 +987,7 @@ class Main(Tk):
 		queue_panel.destroy()
 		
 		video, download_stream, video_name, video_frame, playlist_name, full_video_type = self.download_queue.popleft()
-		self.settings["extension"], self.settings["no_audio"] = slowtube.filter_extension_type(full_video_type)
+		self.settings["extension"], self.settings["download_type"] = slowtube.filter_extension_type(full_video_type)
 		self.video = video
 		self.downloading_now = True
 		self.video_name = video_name
@@ -1004,7 +1003,8 @@ class Main(Tk):
 		def set_quality(*event):
 			ext = ext_var.get()
 			quals = ["best", "worst"]
-			if ext == 'mp3' or ext == "webm audio":
+			_, download_type = slowtube.filter_extension_type(ext)
+			if download_type == "audio":
 				quals.extend(self.possible_audio_quality)
 			else:
 				quals.extend(self.possible_video_quality)
@@ -1375,7 +1375,8 @@ class Main(Tk):
 		self.purple_text = "#CDCDCD"
 		
 		self.preview_size = 58
-		self.possible_extensions = ("mp3", "webm audio", "webm video", "mp4", "mp4 (no_audio)")
+		self.possible_extensions = ("mp3", "webm audio", "webm video", "webm both",
+		                            "mp4 audio", "mp4 video", "mp4 both")
 		#  Just "mp4" has both audio and video tracks, I'll need to rename it
 		self.possible_audio_quality = ("48kbps", "50kbps", "70kbps", "128kbps", "160kbps")
 		self.possible_video_quality = ("144p", "240p", "360p", "480p", "720p", "1080p", "1440p", "2160p")

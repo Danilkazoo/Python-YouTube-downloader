@@ -535,7 +535,14 @@ class Main(Tk):
 			return
 		
 		lag_warning_event = self.after(5000, lambda: hide_show(self.lag_warning_lbl, show=True))
+		if self.settings.get("do_quick"):
+			self.en_url.delete(0, END)  # The problem is that it looks unresponsive, lol
+		
 		# This event will show the user that YouTube lags at the moment, so they see that everything still works
+		# and this small function will turn this warning off, it should only be visible when lagging
+		def close_lag_lbl():
+			self.after_cancel(lag_warning_event)
+			hide_show(self.lag_warning_lbl, show=False)
 		
 		is_playlist = slowtube.is_playlist(url)
 		if is_playlist == 1:
@@ -547,8 +554,7 @@ class Main(Tk):
 				playlist_window_thread = threading.Thread(target=self.create_playlist_window, args=(url, is_playlist))
 				playlist_window_thread.start()
 				
-				self.after_cancel(lag_warning_event)
-				hide_show(self.lag_warning_lbl, show=False)
+				close_lag_lbl()
 				return
 		elif is_playlist == 2:
 			if self.settings.get('print'):
@@ -557,29 +563,27 @@ class Main(Tk):
 			playlist_window_thread = threading.Thread(target=self.create_playlist_window, args=(url, is_playlist))
 			playlist_window_thread.start()
 			
-			self.after_cancel(lag_warning_event)
-			hide_show(self.lag_warning_lbl, show=False)
+			close_lag_lbl()
 			return
 		
 		if self.prev_url != url:
 			self.prev_url = url
-			video, error = slowtube.get_video(url)
+			video, error = slowtube.get_video(url)  # If YouTube lags the program will lag here
 			if video is None:
 				if error is not None:
 					self.create_error_panel(url, error)  # Something went wrong so I show it
+				close_lag_lbl()
 				return
 			
 			streams = video.streams
 			
-			self.after_cancel(lag_warning_event)
-			hide_show(self.lag_warning_lbl, show=False)
+			close_lag_lbl()
 			if self.prev_url != url:
 				return  # I check it the second time in case the user lags, and they had changed video url while getting a response
 			self.input_video = video
 		else:
 			streams = self.input_video.streams
-			self.after_cancel(lag_warning_event)
-			hide_show(self.lag_warning_lbl, show=False)
+			close_lag_lbl()
 		
 		if self.settings['do_quick'] is False:
 			if self.extension_var.get() is None:
@@ -594,7 +598,6 @@ class Main(Tk):
 			input_streams = slowtube.filter_streams(streams, self.settings.get("quick_type"), self.settings)
 			selected_stream = slowtube.quick_select(input_streams, self.settings.get("quick_quality"),
 			                                        self.settings.get("quick_type"), self.settings)
-			self.en_url.delete(0, 'end')
 			
 			if self.settings.get("print"):
 				print("\nSelected stream:", selected_stream)
@@ -1319,7 +1322,6 @@ class Main(Tk):
 	def canvas_resize_logic(self):
 		self.panels_frm.configure(height=self.panels_frm.winfo_reqheight())
 		
-		# TODO: check, here was height(), NOT reqheight()
 		new_height = self.winfo_reqheight()
 		if self.settings.get("print"):
 			print("New height:", new_height)

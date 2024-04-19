@@ -850,11 +850,11 @@ class Main(Tk):
 		                           bg=self.df_frame_background_color, font=self.small_font)
 		debug_var.set(self.settings['print'])
 		debug_var.trace('w', lambda *event: update_checkbox("print", debug_var, debug_choice))
-		debug_choice.grid(row=10, column=6, padx=10, pady=10, sticky='w')  # TODO: Find how to add this only for me
+		if self.settings.get("add_debug"):  # I can turn debug on and off, but only with my settings
+			debug_choice.grid(row=10, column=6, padx=10, pady=10, sticky='w')
 		
 		theme_lbl = Label(settings_window, text="Visual", font=(self.main_font, 14),
-		                  bg=self.df_frame_background_color,
-		                  fg=text_color)
+		                  bg=self.df_frame_background_color, fg=text_color)
 		theme_lbl.grid(row=2, column=1, pady=(15, 5))
 		theme_var = IntVar()
 		theme_var.set(self.settings['visual_theme'])

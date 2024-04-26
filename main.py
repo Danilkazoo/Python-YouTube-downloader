@@ -75,7 +75,7 @@ class Main(Tk):
 		
 		df = Frame(self, padx=10, pady=10, bg=self.df_frame_background_color, height=800, width=800)
 		
-		url_ins_btn = Button(df, text="Вставить ссылку", font=(self.main_font, 15), height=2, relief="solid",
+		url_ins_btn = Button(df, text="Insert url", font=(self.main_font, 15), height=2, relief="solid",
 		                     command=lambda: self.url_var.set(self.clipboard_get()), bg=self.df_widgets_bg_col,
 		                     fg=self.df_text_color)
 		url_ins_btn.grid(row=1, column=1, padx=(10, 0), pady=10)
@@ -535,8 +535,6 @@ class Main(Tk):
 			return
 		
 		lag_warning_event = self.after(5000, lambda: hide_show(self.lag_warning_lbl, show=True))
-		if self.settings.get("do_quick"):
-			self.en_url.delete(0, END)  # The problem is that it looks unresponsive, lol
 		
 		# This event will show the user that YouTube lags at the moment, so they see that everything still works
 		# and this small function will turn this warning off, it should only be visible when lagging
@@ -568,6 +566,8 @@ class Main(Tk):
 		
 		if self.prev_url != url:
 			self.prev_url = url
+			if self.settings.get("print"):
+				print(f"Getting a video from a given url: {url}")
 			video, error = slowtube.get_video(url)  # If YouTube lags the program will lag here
 			if video is None:
 				if error is not None:
@@ -598,6 +598,8 @@ class Main(Tk):
 			input_streams = slowtube.filter_streams(streams, self.settings.get("quick_type"), self.settings)
 			selected_stream = slowtube.quick_select(input_streams, self.settings.get("quick_quality"),
 			                                        self.settings.get("quick_type"), self.settings)
+			
+			self.en_url.delete(0, 'end')
 			
 			if self.settings.get("print"):
 				print("\nSelected stream:", selected_stream)
@@ -853,7 +855,7 @@ class Main(Tk):
 		if self.settings.get("add_debug"):  # I can turn debug on and off, but only with my settings
 			debug_choice.grid(row=10, column=6, padx=10, pady=10, sticky='w')
 		
-		theme_lbl = Label(settings_window, text="Visual", font=(self.main_font, 14),
+		theme_lbl = Label(settings_window, text="Visual style", font=(self.main_font, 14),
 		                  bg=self.df_frame_background_color, fg=text_color)
 		theme_lbl.grid(row=2, column=1, pady=(15, 5))
 		theme_var = IntVar()
@@ -1030,7 +1032,7 @@ class Main(Tk):
 			# Should I add delay to not spam to youtube ? neva wanna look like a bot lol
 			for video in playlist.videos_generator():
 				input_streams = slowtube.filter_streams(video.streams, ext_var.get(), self.settings)
-				selected_stream = slowtube.quick_select(input_streams, qual_var, ext_var, self.settings)
+				selected_stream = slowtube.quick_select(input_streams, qual_var.get(), ext_var.get(), self.settings)
 				self.add_to_queue(download_stream=selected_stream, input_video=video,
 				                  this_playlist_path=new_playlist_path, download_type_name=ext_var.get())
 		
@@ -1045,7 +1047,7 @@ class Main(Tk):
 				return
 			
 			input_streams = slowtube.filter_streams(video.streams, ext_var.get(), self.settings)
-			selected_stream = slowtube.quick_select(input_streams, qual_var, ext_var, self.settings)
+			selected_stream = slowtube.quick_select(input_streams, qual_var.get(), ext_var.get(), self.settings)
 			self.add_to_queue(download_stream=selected_stream, input_video=video, download_type_name=ext_var.get())
 			
 			playlist_window.destroy()
@@ -1055,6 +1057,7 @@ class Main(Tk):
 				nonlocal ignore_scrolling
 				ignore_scrolling = True
 				playlist_window.withdraw()
+				self.overrideredirect(False)  # So windows sees only the playlist window
 				
 				if self.settings.get("create_new_files"):
 					this_playlist_name = slowtube.sanitize_playlist_name(playlist.title)
@@ -1065,7 +1068,7 @@ class Main(Tk):
 				for video, do_download in video_choices:
 					if do_download.get():
 						input_streams = slowtube.filter_streams(video.streams, ext_var.get(), self.settings)
-						selected_stream = slowtube.quick_select(input_streams, qual_var, ext_var, self.settings)
+						selected_stream = slowtube.quick_select(input_streams, qual_var.get(), ext_var.get(), self.settings)
 						self.add_to_queue(download_stream=selected_stream, input_video=video,
 						                  this_playlist_path=new_playlist_path, download_type_name=ext_var.get())
 				

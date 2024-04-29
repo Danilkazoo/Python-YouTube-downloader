@@ -988,13 +988,13 @@ class Main(Tk):
 		if self.downloading_now or not self.download_queue:
 			return
 		
+		self.downloading_now = True
 		queue_panel = self.queue_panels.popleft()
 		queue_panel.destroy()
 		
 		video, download_stream, video_name, video_frame, playlist_name, full_video_type = self.download_queue.popleft()
 		self.settings["extension"], self.settings["download_type"] = slowtube.filter_extension_type(full_video_type)
 		self.video = video
-		self.downloading_now = True
 		self.video_name = video_name
 		self.this_video_frame = video_frame
 		self.this_playlist_save_path = playlist_name
@@ -1021,6 +1021,8 @@ class Main(Tk):
 			playlist = slowtube.get_playlist(url)
 			self.url_var.set('')
 			
+			download_ext = ext_var.get()
+			download_qual = qual_var.get()
 			playlist_window.destroy()
 			
 			if self.settings.get("create_new_files"):
@@ -1031,10 +1033,10 @@ class Main(Tk):
 			
 			# Should I add delay to not spam to youtube ? neva wanna look like a bot lol
 			for video in playlist.videos_generator():
-				input_streams = slowtube.filter_streams(video.streams, ext_var.get(), self.settings)
-				selected_stream = slowtube.quick_select(input_streams, qual_var.get(), ext_var.get(), self.settings)
+				input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings)
+				selected_stream = slowtube.quick_select(input_streams, download_qual, download_ext, self.settings)
 				self.add_to_queue(download_stream=selected_stream, input_video=video,
-				                  this_playlist_path=new_playlist_path, download_type_name=ext_var.get())
+				                  this_playlist_path=new_playlist_path, download_type_name=download_ext)
 		
 		def nah_download_one():
 			playlist_window.withdraw()
@@ -1068,7 +1070,8 @@ class Main(Tk):
 				for video, do_download in video_choices:
 					if do_download.get():
 						input_streams = slowtube.filter_streams(video.streams, ext_var.get(), self.settings)
-						selected_stream = slowtube.quick_select(input_streams, qual_var.get(), ext_var.get(), self.settings)
+						selected_stream = slowtube.quick_select(input_streams, qual_var.get(), ext_var.get(),
+						                                        self.settings)
 						self.add_to_queue(download_stream=selected_stream, input_video=video,
 						                  this_playlist_path=new_playlist_path, download_type_name=ext_var.get())
 				
@@ -1086,6 +1089,7 @@ class Main(Tk):
 			
 			playlist = slowtube.get_playlist(url)
 			videos = playlist.videos
+			video_choices = []  # I changed the location of this line just cause someone managed to break the unbreakable 
 			self.url_var.set('')
 			one_video_btn.destroy()
 			all_videos_btn.destroy()
@@ -1151,7 +1155,6 @@ class Main(Tk):
 			variant = self.settings.get('visual_theme')
 			do_preview = self.settings.get("download_prewievs")
 			im_references = []
-			video_choices = []
 			
 			def change_background(back_color, border_color, frm, *widgets):
 				for w in widgets:

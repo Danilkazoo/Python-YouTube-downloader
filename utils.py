@@ -1,6 +1,6 @@
 import os
 import shutil
-from tkinter import Widget, Toplevel, Entry, Tk
+from tkinter import Widget, Toplevel, Entry, Tk, Label
 
 
 def btn_glow(*event, widget: Widget, enter: bool, back_color="#313131", glow_color="#414141"):
@@ -111,3 +111,22 @@ def input_clipboard(event, entry: Entry):
 	if event.state == 4 and event.keycode == 86:
 		entry.delete(0, "end")
 		entry.event_generate("<<Paste>>")  # Not sure if it will 100% work
+
+
+def fit_label_text(lbl: Label, font, starting_font_size, condition):
+	"""
+	This function will resize the text by decrementing font size until the condition is true.
+	If text cannot fit - it will have the size of 1
+	
+	:param condition: Condition to try, example - lambda lbl: lbl.winfo_reqwidth() <= 450
+	"""
+	
+	lbl.update_idletasks()
+	for i in range(starting_font_size, 0, -1):
+		lbl.configure(font=(font, i))
+		lbl.update_idletasks()
+		
+		if condition(lbl):
+			return
+	
+	lbl.configure(font=(font, 1))

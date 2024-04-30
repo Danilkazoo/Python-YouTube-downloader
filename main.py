@@ -12,6 +12,7 @@ from PIL import ImageTk, Image
 from pathvalidate import sanitize_filename as pv_sanitize
 
 import slowtube
+import utils
 from settings import *
 from utils import *
 
@@ -227,6 +228,7 @@ class Main(Tk):
 		def del_this(video_frm):
 			video_frm.destroy()
 			self.canvas_resize_logic()
+			self.update()
 		
 		back_color = self.disabled_color
 		text_color = "black"
@@ -235,22 +237,46 @@ class Main(Tk):
 		                  borderwidth=0)
 		error_frm.pack(fill=X)
 		error_frm.grid_propagate(False)
-		
-		Label(error_frm, text=f"{error}\n{url}", font=(self.main_font, 16, 'bold'), fg=text_color,
-		      bg=back_color, justify="left").grid(row=0, column=0)
-		error_frm.columnconfigure(0, weight=1)
+		error_frm.bind('<Enter>', on_hover)
+		error_frm.bind('<Leave>', out_hover)
 		
 		del_btn = Button(error_frm, text="X", font="Arial 20 bold",
 		                 command=lambda: del_this(error_frm), fg=text_color,
 		                 bg=back_color, relief="flat")
-		del_btn.grid(row=0, column=1)
+		del_btn.grid(row=0, column=1, rowspan=2)
 		del_btn.bind("<Enter>", lambda _, w=del_btn: btn_glow(widget=w, enter=True, glow_color="#f88"))
 		del_btn.bind("<Leave>", lambda _, w=del_btn: btn_glow(widget=w, enter=False, back_color=back_color))
 		
-		error_frm.bind('<Enter>', on_hover)
-		error_frm.bind('<Leave>', out_hover)
+		# It's a stupid way but it works, lol
+		if str(error) == "<urlopen error [Errno 11001] getaddrinfo failed>":
+			def recconnect():
+				self.url_var.set(url)
+				del_this(error_frm)
+			
+			error = "Couldn't get response from url"
+			retry_btn = Button(error_frm, text="Retry", font="Arial 18 bold",
+			                   fg=text_color, bg=back_color, relief="flat",
+			                   command=recconnect)
+			retry_btn.grid(row=0, column=2, rowspan=2)
+			retry_btn.bind("<Enter>", lambda _, w=retry_btn: btn_glow(widget=w, enter=True, glow_color="#f88"))
+			retry_btn.bind("<Leave>", lambda _, w=retry_btn: btn_glow(widget=w, enter=False, back_color=back_color))
+		
+		error_lbl = Label(error_frm, text=str(error), font=(self.main_font, 16, 'bold'), fg=text_color,
+		                  bg=back_color, justify="left")
+		utils.fit_label_text(error_lbl, (self.main_font, "bold"), 16,
+		                     lambda lbl: lbl.winfo_reqwidth() <= error_frm.winfo_width() - del_btn.winfo_reqwidth())
+		error_lbl.grid(column=0, row=0, sticky='nw')
+		
+		url_lbl = Label(error_frm, text=url, font=(self.main_font, 16, 'bold'), fg=text_color,
+		                bg=back_color, justify="left")
+		utils.fit_label_text(url_lbl, (self.main_font, "bold"), 16,
+		                     lambda lbl: lbl.winfo_reqwidth() <= error_frm.winfo_width() - del_btn.winfo_reqwidth())
+		url_lbl.grid(column=0, row=1, sticky='sw')
+		
+		error_frm.columnconfigure(0, weight=1)
 		out_hover()
 		self.canvas_resize_logic()
+		self.update()
 	
 	# Panels with progress bar
 	def create_progress_panel(self):
@@ -366,12 +392,8 @@ class Main(Tk):
 		
 		name_lbl = Label(downloaded_frm, text=video_name, font=(self.main_font, 14), foreground=text_color,
 		                 background=back_color, anchor='w')
-		i = 13
-		downloaded_frm.update_idletasks()
-		while name_lbl.winfo_reqwidth() > downloaded_frm.winfo_width() - 70:  # Resize if name is too big
-			name_lbl.configure(font=(self.main_font, i))
-			i -= 1
-			downloaded_frm.update_idletasks()
+		utils.fit_label_text(name_lbl, self.main_font, 14,
+		                     lambda lbl: lbl.winfo_reqwidth() <= downloaded_frm.winfo_width() - 70)
 		name_lbl.grid(column=2, row=0, sticky='we', columnspan=4)
 		
 		info_lbl = Label(downloaded_frm,
@@ -449,12 +471,9 @@ class Main(Tk):
 			                                                              download_location, new_title_path))
 			title_lbl = Label(downloaded_frm, text=video_name, font=(self.main_font, 12), foreground=text_color,
 			                  background=back_color, anchor='e')
-			i = 11
-			downloaded_frm.update_idletasks()
-			while title_lbl.winfo_reqwidth() > 450:  # Resize if title is too big
-				title_lbl.configure(font=(self.main_font, i))
-				i -= 1
-				downloaded_frm.update_idletasks()
+			utils.fit_label_text(title_lbl, self.main_font, 12,
+			                     lambda lbl: lbl.winfo_reqwidth() <= 450)
+			
 			title_lbl.configure(text=self.video_title)
 		else:
 			title_lbl = Label(downloaded_frm, foreground=text_color, background=back_color)  # Dummy
@@ -568,6 +587,9 @@ class Main(Tk):
 			self.prev_url = url
 			if self.settings.get("print"):
 				print(f"Getting a video from a given url: {url}")
+			
+			self.stream_choice.configure(values=())  # So you can't choose previous video when inputting this one
+			self.streams_var.set("")
 			video, error = slowtube.get_video(url)  # If YouTube lags the program will lag here
 			if video is None:
 				if error is not None:
@@ -582,6 +604,17 @@ class Main(Tk):
 				return  # I check it the second time in case the user lags, and they had changed video url while getting a response
 			self.input_video = video
 		else:
+			if self.input_video is None:  # It means that we couldn't get a video previously -> try again
+				
+				if self.settings.get("print"):
+					print(f"Getting a video from a given url: {url}")
+				video, error = slowtube.get_video(url)
+				if video is None:
+					if error is not None:
+						self.create_error_panel(url, error)
+					close_lag_lbl()
+					return
+				self.input_video = video
 			streams = self.input_video.streams
 			close_lag_lbl()
 		
@@ -1046,7 +1079,10 @@ class Main(Tk):
 			
 			video, error = slowtube.get_video(url)
 			if video is None:
-				if error is not None:
+				if False:
+					...
+				elif error is not None:
+					print(error.args, error.mro())
 					self.create_error_panel(url, error)  # Something went wrong so I show it
 				playlist_window.destroy()
 				return
@@ -1249,11 +1285,8 @@ class Main(Tk):
 				if do_preview:
 					preview_size = 30
 				
-				i = 13  # Resize the text if it doesn't fit
-				while name_lbl.winfo_reqwidth() > self.playlist_window_width - preview_size - 50:
-					name_lbl.configure(font=(self.main_font, i))
-					i -= 1
-					playlist_window.update_idletasks()
+				utils.fit_label_text(name_lbl, self.main_font, 13,
+				                     lambda lbl: lbl.winfo_reqwidth() <= self.playlist_window_width - preview_size - 50)
 				
 				if do_preview:
 					parts = (dis_video_frm, name_lbl, info_lbl, im_references[-1], check)

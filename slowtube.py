@@ -298,7 +298,7 @@ def quick_select(streams: pytube.query.StreamQuery, quick_quality, quick_type, s
 	return result
 
 
-def get_video(url: str):
+def get_video(url: str) -> (pytube.YouTube, Exception):
 	try:
 		video = pytube.YouTube(url)
 		trying = video.streams  # I am trying to get video streams here, it will make an error if not possible

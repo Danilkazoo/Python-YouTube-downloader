@@ -34,6 +34,8 @@ class Main(Tk):
 		self.playlist_images = []
 		self.download_queue = deque()
 		self.queue_panels = deque()
+		self.retry_list = []
+		self.currently_retrying = False
 		self.downloading_now = 0
 		
 		self.init_constants()
@@ -67,6 +69,8 @@ class Main(Tk):
 		
 		def retry_download():
 			hide_show(self.download_retry_btn, show=False)
+			retry_thread = threading.Thread(target=self.retry_requests)
+			retry_thread.start()
 			download_thread = threading.Thread(target=self.download_next)
 			download_thread.start()
 		
@@ -233,6 +237,11 @@ class Main(Tk):
 	
 	# Panels for errors
 	def create_error_panel(self, url, error):
+		"""
+		A panel for general errors.
+		If error is internet connection (urlopen error) - it'll have a button to input given url into entry
+		"""
+		
 		def on_hover(*event):
 			hide_show(del_btn, show=True)
 		
@@ -264,6 +273,7 @@ class Main(Tk):
 		# It's a stupid way but it works, lol
 		if str(error) == "<urlopen error [Errno 11001] getaddrinfo failed>":
 			def recconnect():
+				"""Just inputs given url into entry"""
 				self.url_var.set(url)
 				del_this(error_frm)
 			
@@ -291,6 +301,122 @@ class Main(Tk):
 		out_hover()
 		self.canvas_resize_logic()
 		self.update()
+	
+	def create_retry_panel(self, url, download_type, download_quality, playlist_path=None):
+		"""
+		A panel for panels for retrying getting a stream to download.
+		This panel is used only when you are requesting a YouTube video and
+		you already know download settings (quality and download type).
+		Essentially, this is a panel for a moment before this requested video is sent to normal queue panel
+		which requires to have this video from a response. When retrying using retry button -
+		all these should try to get a request again.
+		"""
+		
+		def on_hover(*event):
+			hide_show(del_btn, show=True)
+			hide_show(retry_btn, show=True)
+		
+		def out_hover(*event):
+			hide_show(del_btn, show=False)
+			hide_show(retry_btn, show=False)
+		
+		def del_this(this_info):
+			self.retry_list.remove(this_info)
+			this_info[0].destroy()  # It's retry_frm
+			self.canvas_resize_logic()
+			self.update()
+		
+		def new_thread_retry():
+			retry_thread = threading.Thread(target=self.retry_requests)
+			retry_thread.start()
+		
+		def copy_url():
+			self.clipboard_clear()
+			self.clipboard_append(url)
+		
+		if len(self.retry_list) % 2:
+			back_color = "#bbb"
+		else:
+			back_color = "#aaa"
+		text_color = "black"
+		
+		retry_frm = Frame(self.panels_frm, background=back_color, highlightthickness=0, height=self.video_panel_height,
+		                  borderwidth=0)
+		retry_frm.pack(fill=X)
+		retry_frm.grid_propagate(False)
+		retry_frm.bind('<Enter>', on_hover)
+		retry_frm.bind('<Leave>', out_hover)
+		
+		this_info = (retry_frm, url, download_type, download_quality, playlist_path)
+		
+		del_btn = Button(retry_frm, text="X", font="Arial 20 bold",
+		                 command=lambda: del_this(this_info), fg=text_color,
+		                 bg=back_color, relief="flat")
+		del_btn.grid(row=0, column=1, rowspan=2)
+		del_btn.bind("<Enter>", lambda _, w=del_btn: btn_glow(widget=w, enter=True, glow_color="#888"))
+		del_btn.bind("<Leave>", lambda _, w=del_btn: btn_glow(widget=w, enter=False, back_color=back_color))
+		
+		retry_btn = Button(retry_frm, text="Retry", font="Arial 18 bold",
+		                   fg=text_color, bg=back_color, relief="flat", command=new_thread_retry)
+		retry_btn.grid(row=0, column=2, rowspan=2)
+		retry_btn.bind("<Enter>", lambda _, w=retry_btn: btn_glow(widget=w, enter=True, glow_color="#888"))
+		retry_btn.bind("<Leave>", lambda _, w=retry_btn: btn_glow(widget=w, enter=False, back_color=back_color))
+		
+		btns_width = del_btn.winfo_reqwidth() + retry_btn.winfo_reqwidth()
+		
+		info_lbl = Label(retry_frm, text=f"{download_type} - {download_quality}", font=(self.main_font, 16, 'bold'),
+		                 fg=text_color, bg=back_color, justify="left")
+		utils.fit_label_text(info_lbl, (self.main_font, "bold"), 16,
+		                     lambda lbl: lbl.winfo_reqwidth() <= retry_frm.winfo_width() - btns_width)
+		info_lbl.grid(column=0, row=0, sticky='nw')
+		
+		url_lbl = Label(retry_frm, text=url, font=(self.main_font, 16, 'bold'), fg=text_color,
+		                bg=back_color, justify="left")
+		utils.fit_label_text(url_lbl, (self.main_font, "bold"), 16,
+		                     lambda lbl: lbl.winfo_reqwidth() <= retry_frm.winfo_width() - btns_width)
+		url_lbl.grid(column=0, row=1, sticky='sw')
+		
+		self.retry_list.append(this_info)
+		retry_frm.columnconfigure(0, weight=1)
+		out_hover()
+		self.canvas_resize_logic()
+		self.update()
+	
+	def retry_requests(self):
+		"""
+		Trying to get requests and add them to download_queue
+		"""
+		if self.currently_retrying or not self.retry_list:
+			return
+		
+		self.currently_retrying = True
+		if self.settings.get("print"):
+			print(f"\nTrying to retry requests. Current retries left: {len(self.retry_list)}\n")
+		
+		while self.retry_list:
+			retry_frm, video_url, video_type, video_quality, playlist_path = self.retry_list[0]
+			video, error = slowtube.get_video(video_url)
+			self.update_idletasks()
+			if video is None:  # Cancel retries if there's still no internet connection
+				self.currently_retrying = False
+				return
+			
+			streams = video.streams
+			input_streams = slowtube.filter_streams(streams, video_type, self.settings.get("print"))
+			selected_stream = slowtube.quick_select(input_streams, video_quality, video_type,
+			                                        do_print=self.settings.get("print"))
+			
+			if self.settings.get("print"):
+				print("\nSelected stream:", selected_stream)
+			
+			self.add_to_download_queue(download_stream=selected_stream, this_playlist_path=playlist_path,
+			                           download_type_name=video_type, input_video=video)
+			self.retry_list.pop(0)
+			retry_frm.destroy()  # Deleting added to queue video and it's panel
+			self.canvas_resize_logic()
+			self.update()
+		
+		self.currently_retrying = False
 	
 	# Panels with progress bar
 	def create_progress_panel(self):
@@ -530,7 +656,7 @@ class Main(Tk):
 		if do_preview:
 			size = self.preview_size  # Hardcoded cuz panel itself is hardcoded
 			
-			try:
+			try:  # TODO: check if this lags, added recently, could lag (even if low chance)
 				response = requests.get(self.video.thumbnail_url)
 				
 				img = Image.open(BytesIO(response.content)).resize((size, size))
@@ -568,9 +694,16 @@ class Main(Tk):
 		download_thread.start()
 	
 	def check_url(self):
+		"""
+		Gets all starting information about an inputted url - getting video, streams, playlists
+		"""
 		url = self.url_var.get()
 		if url == '':
 			return
+		
+		do_quick = self.settings.get("do_quick")
+		if do_quick:
+			quick_type, quick_qual = self.settings.get("quick_type"), self.settings.get("quick_quality")
 		
 		lag_warning_event = self.after(5000, lambda: hide_show(self.lag_warning_lbl, show=True))
 		
@@ -611,52 +744,63 @@ class Main(Tk):
 			self.streams_var.set("")
 			video, error = slowtube.get_video(url)  # If YouTube lags the program will lag here
 			if video is None:
-				if error is not None:
-					self.create_error_panel(url, error)  # Something went wrong so I show it
+				if isinstance(error, urllib.error.URLError) and do_quick:  # Retry when fast download
+					self.create_retry_panel(url, quick_type, quick_qual)
+					self.url_var.set("")
+				elif error is not None:
+					self.create_error_panel(url, error)
 				close_lag_lbl()
 				return
 			
 			streams = video.streams
 			
 			close_lag_lbl()
-			if self.prev_url != url:
-				return  # I check it the second time in case the user lags, and they had changed video url while getting a response
-			self.input_video = video
+			# I check it the second time in case the user lags, and they had changed video url while getting a response
+			if self.prev_url != url and not do_quick:
+				return
+			# If user didn't change input AND they turned on fast download - empty the input
+			if self.prev_url == url and do_quick:
+				self.url_var.set("")
 		else:
 			if self.input_video is None:  # It means that we couldn't get a video previously -> try again
 				if self.settings.get("print"):
 					print(f"Getting a video from a given url: {url}")
+				
 				video, error = slowtube.get_video(url)
 				if video is None:
-					if error is not None:
+					if isinstance(error, urllib.error.URLError) and do_quick:
+						self.create_retry_panel(url, quick_type, quick_qual)
+						self.url_var.set("")
+					elif error is not None:
 						self.create_error_panel(url, error)
 					close_lag_lbl()
 					return
-				self.input_video = video
+				
+				if self.prev_url == url:
+					self.input_video = video
+			else:
+				video = self.input_video
 			streams = self.input_video.streams
 			close_lag_lbl()
 		
-		if self.settings['do_quick'] is False:
+		if not do_quick:
 			if self.extension_var.get() is None:
 				return
 			
-			input_streams = slowtube.filter_streams(streams, self.extension_var.get(), self.settings)
+			input_streams = slowtube.filter_streams(streams, self.extension_var.get(), self.settings.get("print"))
 			self.understandable_streams = slowtube.streams_to_human(input_streams)
 			self.stream_choice.configure(values=self.understandable_streams)
 			self.streams_var.set(self.understandable_streams[-1])
 			self.input_streams = input_streams  # used only when downloading video manually
 		else:
-			input_streams = slowtube.filter_streams(streams, self.settings.get("quick_type"), self.settings)
-			selected_stream = slowtube.quick_select(input_streams, self.settings.get("quick_quality"),
-			                                        self.settings.get("quick_type"), self.settings)
-			
-			self.en_url.delete(0, 'end')
+			input_streams = slowtube.filter_streams(streams, quick_type, self.settings.get("print"))
+			selected_stream = slowtube.quick_select(input_streams, quick_qual, quick_type, self.settings.get("print"))
 			
 			if self.settings.get("print"):
 				print("\nSelected stream:", selected_stream)
 			
-			self.add_to_download_queue(download_stream=selected_stream,
-			                           download_type_name=self.settings.get("quick_type"))
+			self.add_to_download_queue(download_stream=selected_stream, input_video=video,
+			                           download_type_name=quick_type)
 	
 	def download_selected(self, stream):
 		def retry_later():  # User had no internet when downloading
@@ -1045,6 +1189,7 @@ class Main(Tk):
 		:param download_stream: Not given only when user chooses what to download manually and presses the button.
 		:param download_type_name: Full name of download type (from self.possible_extensions) - for example, WEBM AUDIO.
 		:param input_video: Inputted only when this function is called from playlist, where we send each video manually.
+		Otherwise, it will be taken from self.input_video
 		:param this_playlist_path: Inputted when playlist creates a new save location - new file for this exact playlist.
 		:param auto_download_next: Should function download_next be called.
 		"""
@@ -1127,8 +1272,9 @@ class Main(Tk):
 			
 			# Should I add delay to not spam to youtube ? neva wanna look like a bot lol
 			for video in playlist.videos_generator():
-				input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings)
-				selected_stream = slowtube.quick_select(input_streams, download_qual, download_ext, self.settings)
+				input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings.get("print"))
+				selected_stream = slowtube.quick_select(input_streams, download_qual, download_ext,
+				                                        do_print=self.settings.get("print"))
 				self.add_to_download_queue(download_stream=selected_stream, input_video=video,
 				                           this_playlist_path=new_playlist_path, download_type_name=download_ext)
 		
@@ -1140,13 +1286,16 @@ class Main(Tk):
 			
 			video, error = slowtube.get_video(url)
 			if video is None:
-				if error is not None:
+				if isinstance(error, urllib.error.URLError):
+					self.create_retry_panel(url, download_ext, download_qual)
+				elif error is not None:
 					self.create_error_panel(url, error)  # Something went wrong so I show it
 				playlist_window.destroy()
 				return
 			
-			input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings)
-			selected_stream = slowtube.quick_select(input_streams, download_qual, download_ext, self.settings)
+			input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings.get("print"))
+			selected_stream = slowtube.quick_select(input_streams, download_qual, download_ext,
+			                                        do_print=self.settings.get("print"))
 			self.add_to_download_queue(download_stream=selected_stream, input_video=video,
 			                           download_type_name=download_ext)
 		
@@ -1168,9 +1317,9 @@ class Main(Tk):
 				
 				for video, do_download in video_choices:
 					if do_download.get():
-						input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings)
+						input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings.get("print"))
 						selected_stream = slowtube.quick_select(input_streams, download_qual, download_ext,
-						                                        self.settings)
+						                                        do_print=self.settings.get("print"))
 						self.add_to_download_queue(download_stream=selected_stream, input_video=video,
 						                           this_playlist_path=new_playlist_path,
 						                           download_type_name=download_ext)

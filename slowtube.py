@@ -164,23 +164,23 @@ def filter_extension_type(filter_extension_name: str):
 	return extension, audio_type
 
 
-def filter_streams(streams: pytube.query.StreamQuery, full_extension: str, settings: dict) -> pytube.query.StreamQuery:
+def filter_streams(streams: pytube.query.StreamQuery, full_extension: str, do_print: bool) -> pytube.query.StreamQuery:
 	"""
 	Sorts a list of all streams from a video and returns only needed ones.
 	:param streams: A list all streams of a video
 	:param full_extension: Full name of what to you need - WEBM AUDIO, or mp3
-	:param settings: settings from a class, only used for printing actually
+	:param do_print: print debug info - streams, filter type
 	:return: Filtered streams with only needed streams
 	"""
-	if settings.get("print"):
-		print("\n\nSettings:", settings)
+	if do_print:
+		print(f"\n\nFilter type: {full_extension}")
 		print("\nStarting streams:")
 		print(*streams.order_by("itag"), "", sep="\n")
 	
 	extension, download_type = filter_extension_type(full_extension)
 	if download_type == "audio":
 		streams = streams.filter(only_audio=True).order_by('abr')  # Only audio remains
-		if settings.get("print"):
+		if do_print:
 			print("\nResult streams:")
 			print(*streams, sep="\n")
 		return streams
@@ -191,7 +191,7 @@ def filter_streams(streams: pytube.query.StreamQuery, full_extension: str, setti
 	
 	videos = remove_copies(videos, prioritise_progressive=full_extension == "mp4 both")
 	
-	if settings.get("print"):
+	if do_print:
 		print("\nResult streams:")
 		print(*videos, sep="\n")
 	
@@ -249,7 +249,7 @@ def download_video(stream: pytube.streams.Stream, full_path: str, **settings) ->
 	return real_path, None
 
 
-def quick_select(streams: pytube.query.StreamQuery, quick_quality, quick_type, settings: dict) -> pytube.streams.Stream:
+def quick_select(streams: pytube.query.StreamQuery, quick_quality, quick_type, do_print: bool) -> pytube.streams.Stream:
 	"""
 	Selects a single stream out of a list of streams, based on provided settings.
 	Input streams should already be filtered by type.
@@ -280,7 +280,7 @@ def quick_select(streams: pytube.query.StreamQuery, quick_quality, quick_type, s
 			return temp
 	
 	n = res_to_num(quick_quality)
-	if settings.get('print'):
+	if do_print:
 		print("\nThere is no this quality, the closest is:")
 	
 	minres = streams.first()

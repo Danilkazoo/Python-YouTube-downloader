@@ -120,7 +120,7 @@ class Main(Tk):
 		                                  font=self.small_font, textvariable=self.streams_var)
 		self.stream_choice.grid(row=1, column=4)
 		
-		self.download_button = Button(df, text="Donwload", font=self.small_font, command=self.add_to_queue,
+		self.download_button = Button(df, text="Donwload", font=self.small_font, command=self.add_to_download_queue,
 		                              height=2, bg=self.df_widgets_bg_col, fg=self.df_text_color, relief='solid')
 		self.download_button.grid(row=1, column=5, padx=(20, 10))
 		
@@ -655,15 +655,16 @@ class Main(Tk):
 			if self.settings.get("print"):
 				print("\nSelected stream:", selected_stream)
 			
-			self.add_to_queue(download_stream=selected_stream, download_type_name=self.settings.get("quick_type"))
+			self.add_to_download_queue(download_stream=selected_stream,
+			                           download_type_name=self.settings.get("quick_type"))
 	
 	def download_selected(self, stream):
 		def retry_later():  # User had no internet when downloading
 			self.delete_progress_panel()
 			self.this_video_frame.destroy()
-			self.add_to_queue(download_stream=stream, download_type_name=self.full_video_type_name,
-			                  input_video=self.video, this_playlist_path=self.this_playlist_save_path,
-			                  auto_download_next=False)
+			self.add_to_download_queue(download_stream=stream, download_type_name=self.full_video_type_name,
+			                           input_video=self.video, this_playlist_path=self.this_playlist_save_path,
+			                           auto_download_next=False)
 			self.downloading_now -= 1
 			hide_show(self.download_retry_btn, show=True)
 			self.update()
@@ -1036,8 +1037,8 @@ class Main(Tk):
 			print(self.settings)
 	
 	# Add video stream to download to queue
-	def add_to_queue(self, download_stream=None, download_type_name=None, input_video=None, this_playlist_path=None,
-	                 auto_download_next=True):
+	def add_to_download_queue(self, download_stream=None, download_type_name=None, input_video=None,
+	                          this_playlist_path=None, auto_download_next=True):
 		"""
 		This is a function that handles all new videos to be downloaded.
 		
@@ -1128,8 +1129,8 @@ class Main(Tk):
 			for video in playlist.videos_generator():
 				input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings)
 				selected_stream = slowtube.quick_select(input_streams, download_qual, download_ext, self.settings)
-				self.add_to_queue(download_stream=selected_stream, input_video=video,
-				                  this_playlist_path=new_playlist_path, download_type_name=download_ext)
+				self.add_to_download_queue(download_stream=selected_stream, input_video=video,
+				                           this_playlist_path=new_playlist_path, download_type_name=download_ext)
 		
 		def nah_download_one():
 			download_ext = ext_var.get()
@@ -1139,17 +1140,15 @@ class Main(Tk):
 			
 			video, error = slowtube.get_video(url)
 			if video is None:
-				if False:
-					...
-				elif error is not None:
-					print(error.args, error.mro())
+				if error is not None:
 					self.create_error_panel(url, error)  # Something went wrong so I show it
 				playlist_window.destroy()
 				return
 			
 			input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings)
 			selected_stream = slowtube.quick_select(input_streams, download_qual, download_ext, self.settings)
-			self.add_to_queue(download_stream=selected_stream, input_video=video, download_type_name=download_ext)
+			self.add_to_download_queue(download_stream=selected_stream, input_video=video,
+			                           download_type_name=download_ext)
 		
 		def wanna_choose():
 			def download():
@@ -1172,8 +1171,9 @@ class Main(Tk):
 						input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings)
 						selected_stream = slowtube.quick_select(input_streams, download_qual, download_ext,
 						                                        self.settings)
-						self.add_to_queue(download_stream=selected_stream, input_video=video,
-						                  this_playlist_path=new_playlist_path, download_type_name=download_ext)
+						self.add_to_download_queue(download_stream=selected_stream, input_video=video,
+						                           this_playlist_path=new_playlist_path,
+						                           download_type_name=download_ext)
 				
 				self.playlist_images.clear()
 				playlist_window.destroy()
@@ -1372,6 +1372,10 @@ class Main(Tk):
 			choose_thread = threading.Thread(target=wanna_choose)
 			choose_thread.start()
 		
+		def download_one_thread():
+			download_thread = threading.Thread(target=nah_download_one)
+			download_thread.start()
+		
 		back_color = self.df_widgets_bg_col
 		text_color = self.df_text_color
 		
@@ -1382,7 +1386,7 @@ class Main(Tk):
 		
 		if video_type == 1:  # This is a video from a playlist, I can download only it.
 			one_video_btn = Button(playlist_window, bg=back_color, fg=text_color, text="Download one\nvideo",
-			                       font=(self.main_font, 14), command=nah_download_one)
+			                       font=(self.main_font, 14), command=download_one_thread)
 			one_video_btn.grid(row=1, column=0, padx=10)
 		else:
 			one_video_btn = Button()  # Otherwise I create a dummy cuz it is ONLY a playlist, not a video from one

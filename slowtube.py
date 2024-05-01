@@ -1,10 +1,13 @@
 import os
 import subprocess
+import urllib.error
 from math import fabs
 
 import pytube
 from pathvalidate import sanitize_filename as pv_sanitize
 from pytube.exceptions import AgeRestrictedError
+
+import utils
 
 
 def convert_to_extension(file_path: str, update_func, final_extension, do_print, stream: pytube.Stream) -> str:
@@ -195,12 +198,12 @@ def filter_streams(streams: pytube.query.StreamQuery, full_extension: str, setti
 	return videos
 
 
-def download_video(stream: pytube.streams.Stream, full_path, **settings) -> str:
+def download_video(stream: pytube.streams.Stream, full_path: str, **settings) -> (str, Exception | None):
 	"""
 	:param stream: What stream to download, it should be already be chosen.
 	:param full_path: Full path where to download, exactly - what file.
 	:param settings: Some settings to download, mainly download_type, print, name and extension
-	:return: Return real path of a downloaded file.
+	:return: Return real path of a downloaded file. And an exception if there's no internet.
 	"""
 	
 	save_path = full_path  # It is here to send a real path, not in settings save_path in settings
@@ -209,31 +212,27 @@ def download_video(stream: pytube.streams.Stream, full_path, **settings) -> str:
 	starting_extension = os.path.splitext(stream.get_file_path())[1]
 	
 	final_name = pv_sanitize(start_name, replacement_text=' ')
-	prefix_name = final_name
+	prefix_name = final_name  # Only used for prefix, has no additions like "to_convert"
 	if settings.get('download_type') == "both":
 		final_name += "only_video_baka"
 	elif f".{final_extension}" != starting_extension:
 		final_name += "to_convert"
 	
 	# Adding numbers to a file's name, so it doesn't overlap with existing ones
-	prefix = None
-	if os.path.exists(stream.get_file_path(filename=f"{prefix_name}.{final_extension}", output_path=save_path)):
-		prefix = 1
-		while os.path.exists(fr"{save_path}\{prefix} {prefix_name}.{final_extension}"):
-			prefix += 1
-		prefix = f"{prefix} "
+	prefix = utils.calculate_prefix(file_path=save_path, file_name=f"{prefix_name}.{final_extension}")
 	
 	if settings.get("print"):
 		print(f"\n\nDownloading {streams_to_human([stream])[0]} = {stream}")
-		print("To:", stream.get_file_path(filename=f"{final_name}.{final_extension}", output_path=save_path,
-		                                  filename_prefix=prefix))
+		print("To:", os.path.join(save_path, f"{prefix}{final_name}.{final_extension}"))
 		print(f"Download extension: {settings.get('extension')}\nDownload type: {settings.get('download_type')}")
 		print(f"Settings: {settings}")
 	
-	real_path = stream.download(output_path=save_path, filename_prefix=prefix,
-	                            filename=f"{final_name}{starting_extension}")
-	if prefix is None:
-		prefix = ""  # Just so it looks ok in output strings.
+	try:
+		real_path = stream.download(output_path=save_path, filename_prefix=prefix,
+		                            filename=f"{final_name}{starting_extension}")
+	except urllib.error.URLError as error:
+		real_path = os.path.join(save_path, f"{prefix}{final_name}{starting_extension}")
+		return real_path, error
 	
 	if real_path != fr"{save_path}\{prefix}{final_name}{starting_extension}":
 		print("Perhaps file name has some symbols that windows doesn't like")
@@ -247,7 +246,7 @@ def download_video(stream: pytube.streams.Stream, full_path, **settings) -> str:
 		real_path = convert_to_extension(file_path=real_path, update_func=settings.get("update_func"),
 		                                 final_extension=final_extension, do_print=settings.get("print"), stream=stream)
 	
-	return real_path
+	return real_path, None
 
 
 def quick_select(streams: pytube.query.StreamQuery, quick_quality, quick_type, settings: dict) -> pytube.streams.Stream:

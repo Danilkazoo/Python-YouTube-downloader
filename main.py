@@ -1,7 +1,9 @@
+import os.path
 import subprocess
 import threading
 import tkinter.filedialog
 import tkinter.ttk as ttk
+import urllib.error
 from collections import deque
 from io import BytesIO
 from tkinter import *
@@ -32,7 +34,7 @@ class Main(Tk):
 		self.playlist_images = []
 		self.download_queue = deque()
 		self.queue_panels = deque()
-		self.downloading_now = False
+		self.downloading_now = 0
 		
 		self.init_constants()
 		self.init_settings()
@@ -62,6 +64,11 @@ class Main(Tk):
 		def new_thread_url_check(*event):
 			url_check_thread = threading.Thread(target=self.check_url)
 			url_check_thread.start()
+		
+		def retry_download():
+			hide_show(self.download_retry_btn, show=False)
+			download_thread = threading.Thread(target=self.download_next)
+			download_thread.start()
 		
 		combostyle = ttk.Style()
 		combostyle.theme_create('combostyle', parent='alt', settings={'TCombobox': {
@@ -94,6 +101,13 @@ class Main(Tk):
 		self.lag_warning_lbl.grid(row=1, column=2, columnspan=3, sticky="n")
 		hide_show(self.lag_warning_lbl, show=False)
 		
+		# This lambda is an abomination, so, it just tries to download next video from a queue, AND hides this button
+		self.download_retry_btn = Button(df, text="Retry download", font=self.small_font,
+		                                 bg=self.df_widgets_bg_col, fg=self.disabled_color, relief='solid',
+		                                 command=retry_download)
+		self.download_retry_btn.grid(row=1, column=3, sticky="s", columnspan=2)
+		hide_show(self.download_retry_btn, show=False)
+		
 		self.extension_var = StringVar()
 		self.extension_combo = ttk.Combobox(df, values=self.possible_extensions,
 		                                    state="readonly", width=11,
@@ -123,7 +137,7 @@ class Main(Tk):
 			self.extension_var.set(self.settings.get("quick_type"))
 		
 		# Just adds glow when hovering
-		for widget in (url_ins_btn, self.en_url, self.download_button):
+		for widget in (url_ins_btn, self.en_url, self.download_button, self.download_retry_btn):
 			widget.bind("<Enter>", lambda _, w=widget: btn_glow(widget=w, enter=True))
 			widget.bind("<Leave>", lambda _, w=widget: btn_glow(widget=w, enter=False))
 		
@@ -543,7 +557,7 @@ class Main(Tk):
 		
 		self.download_frame.update()
 		self.canvas_resize_logic()
-		self.downloading_now = False
+		self.downloading_now -= 1
 		
 		download_thread = threading.Thread(target=self.download_next)  # Added recently, should not break but who knows
 		download_thread.start()
@@ -605,7 +619,6 @@ class Main(Tk):
 			self.input_video = video
 		else:
 			if self.input_video is None:  # It means that we couldn't get a video previously -> try again
-				
 				if self.settings.get("print"):
 					print(f"Getting a video from a given url: {url}")
 				video, error = slowtube.get_video(url)
@@ -640,6 +653,16 @@ class Main(Tk):
 			self.add_to_queue(download_stream=selected_stream, download_type_name=self.settings.get("quick_type"))
 	
 	def download_selected(self, stream):
+		def retry_later():  # User had no internet when downloading
+			self.delete_progress_panel()
+			self.this_video_frame.destroy()
+			self.add_to_queue(download_stream=stream, download_type_name=self.full_video_type_name,
+			                  input_video=self.video, this_playlist_path=self.this_playlist_save_path,
+			                  auto_download_next=False)
+			self.downloading_now -= 1
+			hide_show(self.download_retry_btn, show=True)
+			self.update()
+		
 		video_name = self.video_name
 		
 		self.create_progress_panel()
@@ -655,16 +678,45 @@ class Main(Tk):
 		# If we need audio and we have only video - download purely audio and merge with video
 		if self.settings.get("download_type") == "both":
 			audio_stream = self.video.streams.filter(only_audio=True).order_by('abr').last()
-			audio_path = audio_stream.download(output_path=save_path,
-			                                   filename=f"{pv_sanitize(video_name, replacement_text=' ')} only_audio_sussy_baka.webm")
+			
+			audio_filename = f"{pv_sanitize(video_name, replacement_text=' ')} only_audio_sussy_baka.webm"
+			prefix = utils.calculate_prefix(save_path, audio_filename)  # Shouldn't be needed actually
+			audio_filename = f"{prefix}{audio_filename}"
+			try:
+				audio_path = audio_stream.download(output_path=save_path, filename=audio_filename)
+			except urllib.error.URLError:  # User had no internet when downloading
+				retry_later()
+				if self.settings.get("print"):
+					print("User failed to download an audio file, likely no connection")
+				
+				# Delete created audio file (it's empty)
+				audio_path = os.path.join(save_path, audio_filename)
+				if os.path.exists(audio_path):
+					os.remove(audio_path)
+				return
 			
 			if self.settings.get('print'):
 				print("\nWe need to merge")
 				print("Selected audio:", audio_stream)
 				print("Temp audio path:", audio_path)
 		
-		downloaded_path = slowtube.download_video(stream, save_path, **self.settings, name=video_name,
-		                                          update_func=self.progress_panel_convert, audio_path=audio_path)
+		downloaded_path, error = slowtube.download_video(stream, save_path, **self.settings, name=video_name,
+		                                                 update_func=self.progress_panel_convert, audio_path=audio_path)
+		
+		if isinstance(error, urllib.error.URLError):  # User had no internet when downloading
+			retry_later()
+			if self.settings.get("print"):
+				print("User failed to download a file, likely no connection")
+			
+			# Delete created audio and video files
+			if audio_path and os.path.exists(audio_path):
+				os.remove(audio_path)
+			
+			if os.path.exists(downloaded_path):
+				os.remove(downloaded_path)
+			
+			return
+		
 		self.create_downloaded_panel(downloaded_path, downloaded_stream=stream)
 	
 	# Settings
@@ -979,7 +1031,8 @@ class Main(Tk):
 			print(self.settings)
 	
 	# Add video stream to download to queue
-	def add_to_queue(self, download_stream=None, download_type_name=None, input_video=None, this_playlist_path=None):
+	def add_to_queue(self, download_stream=None, download_type_name=None, input_video=None, this_playlist_path=None,
+	                 auto_download_next=True):
 		"""
 		This is a function that handles all new videos to be downloaded.
 		
@@ -987,6 +1040,7 @@ class Main(Tk):
 		:param download_type_name: Full name of download type (from self.possible_extensions) - for example, WEBM AUDIO.
 		:param input_video: Inputted only when this function is called from playlist, where we send each video manually.
 		:param this_playlist_path: Inputted when playlist creates a new save location - new file for this exact playlist.
+		:param auto_download_next: Should function download_next be called.
 		"""
 		if download_stream is None:
 			if not self.input_streams:
@@ -1011,8 +1065,9 @@ class Main(Tk):
 		                            this_video_frame, this_playlist_path, download_type_name))
 		self.download_frame.update()
 		
-		download_thread = threading.Thread(target=self.download_next)
-		download_thread.start()
+		if auto_download_next:
+			download_thread = threading.Thread(target=self.download_next)
+			download_thread.start()
 	
 	def download_next(self):
 		"""
@@ -1021,7 +1076,7 @@ class Main(Tk):
 		if self.downloading_now or not self.download_queue:
 			return
 		
-		self.downloading_now = True
+		self.downloading_now += 1
 		queue_panel = self.queue_panels.popleft()
 		queue_panel.destroy()
 		
@@ -1129,7 +1184,7 @@ class Main(Tk):
 			
 			playlist = slowtube.get_playlist(url)
 			videos = playlist.videos
-			video_choices = []  # I changed the location of this line just cause someone managed to break the unbreakable 
+			video_choices = []  # I changed the location of this line just cause someone managed to break the unbreakable
 			self.url_var.set('')
 			one_video_btn.destroy()
 			all_videos_btn.destroy()
@@ -1366,9 +1421,6 @@ class Main(Tk):
 		self.panels_frm.configure(height=self.panels_frm.winfo_reqheight())
 		
 		new_height = self.winfo_reqheight()
-		if self.settings.get("print"):
-			print("New height:", new_height)
-		
 		if new_height <= self.settings.get("max_window_height"):
 			self.df_canvas.configure(height=self.winfo_height(), width=self.panels_frm.winfo_reqwidth())
 			# Delete scrollbar if window fits in the screen
@@ -1383,6 +1435,8 @@ class Main(Tk):
 		# height 145 is impossible for manual resizing, here I check if it was a user who resized the window
 		if event.height != self.winfo_reqheight() and type(event.widget) is Main and event.height >= 145:
 			self.settings["max_window_height"] = self.winfo_height()
+			if self.settings.get("print"):
+				print("New height:", self.settings.get("max_window_height"))
 			self.canvas_resize_logic()
 		self.df_canvas.configure(scrollregion=self.df_canvas.bbox("all"))
 	

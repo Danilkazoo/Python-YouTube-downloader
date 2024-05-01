@@ -130,3 +130,20 @@ def fit_label_text(lbl: Label, font, starting_font_size, condition):
 			return
 	
 	lbl.configure(font=(font, 1))
+
+
+def calculate_prefix(file_path: str, file_name: str) -> str:
+	"""
+	Calculates and returns needed file prefix to avoid name conflicts.
+	For example, if there is a file "file_name" - this function will return prefix "1 "
+	if there is no such file - it will return an empty string
+	:return: Needed file prefix.
+	"""
+	# RN it's a linear search, maybe I should redo this using exponential search ?
+	prefix = ""
+	if os.path.exists(os.path.join(file_path, file_name)):
+		prefix = 1
+		while os.path.exists(os.path.join(file_path, f"{prefix} {file_name}")):
+			prefix += 1
+		prefix = f"{prefix} "
+	return prefix

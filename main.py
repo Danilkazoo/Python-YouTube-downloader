@@ -530,16 +530,21 @@ class Main(Tk):
 		if do_preview:
 			size = self.preview_size  # Hardcoded cuz panel itself is hardcoded
 			
-			response = requests.get(self.video.thumbnail_url)
-			img = Image.open(BytesIO(response.content)).resize((size, size))
-			img = ImageTk.PhotoImage(img)
-			self.preview_images.append(img)
-			
-			preview = Label(downloaded_frm, image=self.preview_images[-1])
-			preview.grid(row=0, column=0, rowspan=2, padx=(5, 10))
-			preview.bind("<Button-3>", popup)
-			preview.bind("<Button-1>", lambda event: url_to_clipboard(this_url, event))
-			del_image = self.preview_images[-1]
+			try:
+				response = requests.get(self.video.thumbnail_url)
+				
+				img = Image.open(BytesIO(response.content)).resize((size, size))
+				img = ImageTk.PhotoImage(img)
+				self.preview_images.append(img)
+				
+				preview = Label(downloaded_frm, image=self.preview_images[-1])
+				preview.grid(row=0, column=0, rowspan=2, padx=(5, 10))
+				preview.bind("<Button-3>", popup)
+				preview.bind("<Button-1>", lambda event: url_to_clipboard(this_url, event))
+				del_image = self.preview_images[-1]
+			except requests.exceptions.ConnectionError:
+				if self.settings.get("print"):
+					print("Couldn't download preview, most likely no internet connection")
 		
 		downloaded_frm.bind('<Enter>', lambda x: on_hover(highlight_color, highlight_border))
 		downloaded_frm.bind('<Leave>', lambda x: out_hover(back_color, border_color))

@@ -31,7 +31,6 @@ class Main(Tk):
 		self.input_video = None
 		
 		self.preview_images = []
-		self.playlist_images = []
 		self.download_queue = deque()
 		self.queue_panels = deque()
 		self.retry_list = []
@@ -187,16 +186,12 @@ class Main(Tk):
 			So I use the most information about this video to be sure (it won't affect speed that much)
 			"""
 			this_find = (this_video, this_stream, name, this_video_frame, playlist_name, ext_type)
-			if self.settings.get("print"):
-				print(f"Queue panels before removing: {len(self.queue_panels)}")
-				print(f"Queue videos before removing: {len(self.download_queue)}")
 			self.queue_panels.remove(frm)
 			self.download_queue.remove(this_find)
 			video_frm.destroy()
 			self.canvas_resize_logic()
 			
 			if self.settings.get("print"):
-				print(f"Queue panels after removing: {len(self.queue_panels)}")
 				print(f"Queue videos after removing: {len(self.download_queue)}")
 		
 		# Panels should have alternating colors
@@ -253,8 +248,24 @@ class Main(Tk):
 			self.canvas_resize_logic()
 			self.update()
 		
+		def url_to_clipboard(url):
+			self.clipboard_clear()
+			self.clipboard_append(url)
+		
+		def rmb_popup(event=None, widget=None):
+			if event is None:
+				x, y = widget.winfo_rootx(), widget.winfo_rooty()
+			else:
+				x, y = event.x_root, event.y_root
+			
+			try:
+				right_click_menu.tk_popup(x, y, 0)
+			finally:
+				right_click_menu.grab_release()
+		
 		back_color = self.disabled_color
 		text_color = "black"
+		error = str(error)
 		
 		error_frm = Frame(self.panels_frm, background=back_color, highlightthickness=0, height=self.video_panel_height,
 		                  borderwidth=0)
@@ -271,7 +282,7 @@ class Main(Tk):
 		del_btn.bind("<Leave>", lambda _, w=del_btn: btn_glow(widget=w, enter=False, back_color=back_color))
 		
 		# It's a stupid way but it works, lol
-		if str(error) == "<urlopen error [Errno 11001] getaddrinfo failed>":
+		if error == "<urlopen error [Errno 11001] getaddrinfo failed>":
 			def recconnect():
 				"""Just inputs given url into entry"""
 				self.url_var.set(url)
@@ -284,8 +295,11 @@ class Main(Tk):
 			retry_btn.grid(row=0, column=2, rowspan=2)
 			retry_btn.bind("<Enter>", lambda _, w=retry_btn: btn_glow(widget=w, enter=True, glow_color="#f88"))
 			retry_btn.bind("<Leave>", lambda _, w=retry_btn: btn_glow(widget=w, enter=False, back_color=back_color))
+		else:
+			print(error)
+			retry_btn = Button()  # Otherwise just create a dummy
 		
-		error_lbl = Label(error_frm, text=str(error), font=(self.main_font, 16, 'bold'), fg=text_color,
+		error_lbl = Label(error_frm, text=error, font=(self.main_font, 16, 'bold'), fg=text_color,
 		                  bg=back_color, justify="left")
 		utils.fit_label_text(error_lbl, (self.main_font, "bold"), 16,
 		                     lambda lbl: lbl.winfo_reqwidth() <= error_frm.winfo_width() - del_btn.winfo_reqwidth())
@@ -296,6 +310,13 @@ class Main(Tk):
 		utils.fit_label_text(url_lbl, (self.main_font, "bold"), 16,
 		                     lambda lbl: lbl.winfo_reqwidth() <= error_frm.winfo_width() - del_btn.winfo_reqwidth())
 		url_lbl.grid(column=0, row=1, sticky='sw')
+		
+		right_click_menu = Menu(error_frm, tearoff=0, font=(self.main_font, 12))
+		right_click_menu.add_command(label='Delete', command=lambda: del_this(error_frm))
+		right_click_menu.add_command(label='Copy a link', command=lambda: url_to_clipboard(url))
+		
+		for responsive_part in (error_frm, error_lbl, url_lbl, del_btn, retry_btn):
+			responsive_part.bind("<Button-3>", rmb_popup)
 		
 		error_frm.columnconfigure(0, weight=1)
 		out_hover()
@@ -326,13 +347,24 @@ class Main(Tk):
 			self.canvas_resize_logic()
 			self.update()
 		
+		def url_to_clipboard(url):
+			self.clipboard_clear()
+			self.clipboard_append(url)
+		
 		def new_thread_retry():
 			retry_thread = threading.Thread(target=self.retry_requests)
 			retry_thread.start()
 		
-		def copy_url():
-			self.clipboard_clear()
-			self.clipboard_append(url)
+		def rmb_popup(event=None, widget=None):
+			if event is None:
+				x, y = widget.winfo_rootx(), widget.winfo_rooty()
+			else:
+				x, y = event.x_root, event.y_root
+			
+			try:
+				right_click_menu.tk_popup(x, y, 0)
+			finally:
+				right_click_menu.grab_release()
 		
 		if len(self.retry_list) % 2:
 			back_color = "#bbb"
@@ -376,6 +408,13 @@ class Main(Tk):
 		                     lambda lbl: lbl.winfo_reqwidth() <= retry_frm.winfo_width() - btns_width)
 		url_lbl.grid(column=0, row=1, sticky='sw')
 		
+		right_click_menu = Menu(retry_frm, tearoff=0, font=(self.main_font, 12))
+		right_click_menu.add_command(label='Delete', command=lambda: del_this(this_info))
+		right_click_menu.add_command(label='Copy a link', command=lambda: url_to_clipboard(url))
+		
+		for responsive_part in (retry_frm, del_btn, retry_btn, info_lbl, url_lbl):
+			responsive_part.bind("<Button-3>", rmb_popup)
+		
 		self.retry_list.append(this_info)
 		retry_frm.columnconfigure(0, weight=1)
 		out_hover()
@@ -395,10 +434,18 @@ class Main(Tk):
 		
 		while self.retry_list:
 			retry_frm, video_url, video_type, video_quality, playlist_path = self.retry_list[0]
+			
+			panel_original_bg = retry_frm["background"]
+			all_panel_parts = (retry_frm, *retry_frm.winfo_children())
+			for panel_part in all_panel_parts:
+				panel_part.configure(background="#888")  # Just so the user sees that retry button works
+			
 			video, error = slowtube.get_video(video_url)
-			self.update_idletasks()
 			if video is None:  # Cancel retries if there's still no internet connection
 				self.currently_retrying = False
+				
+				for panel_part in all_panel_parts:
+					panel_part.configure(background=panel_original_bg)
 				return
 			
 			streams = video.streams
@@ -741,7 +788,10 @@ class Main(Tk):
 				print(f"Getting a video from a given url: {url}")
 			
 			self.stream_choice.configure(values=())  # So you can't choose previous video when inputting this one
-			self.streams_var.set("")
+			if not do_quick:
+				self.streams_var.set("")
+			else:
+				self.after(500, lambda: self.url_var.set(""))
 			video, error = slowtube.get_video(url)  # If YouTube lags the program will lag here
 			if video is None:
 				if isinstance(error, urllib.error.URLError) and do_quick:  # Retry when fast download
@@ -1243,7 +1293,7 @@ class Main(Tk):
 		self.download_selected(download_stream)
 	
 	# Playlist download window
-	def create_playlist_window(self, url: str, video_type: int):
+	def create_playlist_window(self, url: str, playlist_type: int):
 		def set_quality(*event):
 			ext = ext_var.get()
 			quals = ["best", "worst"]
@@ -1256,13 +1306,15 @@ class Main(Tk):
 			qual_var.set(quals[0])
 		
 		def download_all():
-			playlist_window.withdraw()
-			playlist = slowtube.get_playlist(url)
-			self.url_var.set('')
-			
 			download_ext = ext_var.get()
 			download_qual = qual_var.get()
 			playlist_window.destroy()
+			
+			try:
+				playlist = slowtube.get_playlist(url)
+			except urllib.error.URLError as e:
+				self.create_error_panel(url, e)
+				return
 			
 			if self.settings.get("create_new_files"):
 				this_playlist_name = slowtube.sanitize_playlist_name(playlist.title)
@@ -1270,8 +1322,16 @@ class Main(Tk):
 			else:
 				new_playlist_path = None
 			
-			# Should I add delay to not spam to youtube ? neva wanna look like a bot lol
-			for video in playlist.videos_generator():
+			# Should I add delay to not spam to youtube ? not to look like a bot
+			for video_url in playlist.url_generator():
+				video, error = slowtube.get_video(video_url)
+				if video is None:
+					if isinstance(error, urllib.error.URLError):
+						self.create_retry_panel(url, download_ext, download_qual)
+					elif error is not None:
+						self.create_error_panel(url, error)  # Something went wrong so I show it
+					continue
+				
 				input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings.get("print"))
 				selected_stream = slowtube.quick_select(input_streams, download_qual, download_ext,
 				                                        do_print=self.settings.get("print"))
@@ -1290,7 +1350,6 @@ class Main(Tk):
 					self.create_retry_panel(url, download_ext, download_qual)
 				elif error is not None:
 					self.create_error_panel(url, error)  # Something went wrong so I show it
-				playlist_window.destroy()
 				return
 			
 			input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings.get("print"))
@@ -1300,14 +1359,19 @@ class Main(Tk):
 			                           download_type_name=download_ext)
 		
 		def wanna_choose():
-			def download():
+			def download(video_choices: list, im_references: list):
 				nonlocal ignore_scrolling
 				ignore_scrolling = True
 				
 				download_ext = ext_var.get()
 				download_qual = qual_var.get()
 				playlist_window.withdraw()
-				self.overrideredirect(False)  # So windows sees only the playlist window
+				self.overrideredirect(False)  # So windows sees only the main_window
+				self.focus_set()
+				
+				print("Downloading")
+				print(threading.current_thread())
+				print(video_choices)
 				
 				if self.settings.get("create_new_files"):
 					this_playlist_name = slowtube.sanitize_playlist_name(playlist.title)
@@ -1317,6 +1381,11 @@ class Main(Tk):
 				
 				for video, do_download in video_choices:
 					if do_download.get():
+						try:
+							streams = video.streams
+						except urllib.error.URLError:
+							self.create_retry_panel(url, download_ext, download_qual, new_playlist_path)
+						
 						input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings.get("print"))
 						selected_stream = slowtube.quick_select(input_streams, download_qual, download_ext,
 						                                        do_print=self.settings.get("print"))
@@ -1324,9 +1393,14 @@ class Main(Tk):
 						                           this_playlist_path=new_playlist_path,
 						                           download_type_name=download_ext)
 				
-				self.playlist_images.clear()
 				playlist_window.destroy()
+				im_references.clear()
+				video_choices.clear()
 				del im_references, video_choices
+			
+			def new_thread_download(video_choices, im_references):
+				download_thread = threading.Thread(target=download, args=(video_choices, im_references))
+				download_thread.start()
 			
 			def onclose():
 				self.overrideredirect(False)
@@ -1336,18 +1410,52 @@ class Main(Tk):
 			self.overrideredirect(True)  # So windows sees only the playlist window
 			playlist_window.protocol("WM_DELETE_WINDOW", onclose)
 			
-			playlist = slowtube.get_playlist(url)
-			videos = playlist.videos
-			video_choices = []  # I changed the location of this line just cause someone managed to break the unbreakable
-			self.url_var.set('')
 			one_video_btn.destroy()
 			all_videos_btn.destroy()
 			select_video_btn.destroy()
+			
+			try:
+				playlist = slowtube.get_playlist(url)
+				videos = playlist.videos
+			except urllib.error.URLError as e:
+				self.create_error_panel(url, e)
+				onclose()
+				return
+			
+			variant = self.settings.get('visual_theme')
+			do_preview = self.settings.get("download_prewievs")
+			im_references = []
+			video_choices = []  # I changed the location of this line just cause someone managed to break the unbreakable
+			
 			download_btn = Button(playlist_window, bg=back_color, fg=text_color,
-			                      text="Download checked ones",
-			                      font=(self.main_font, 14), command=download, state="disabled")
+			                      text="Download checked ones", state="disabled",
+			                      font=(self.main_font, 14),
+			                      command=lambda: new_thread_download(video_choices, im_references))
 			download_btn.grid(row=1, column=0, padx=10, columnspan=2)
 			
+			# No internet connection logic
+			def retry_playlist():
+				utils.hide_show(download_btn, show=True)
+				utils.hide_show(check_all_btn, show=True)
+				utils.hide_show(retry_btn, show=False)
+				
+				iterate_playlist_thread = threading.Thread(target=iterate_playlist)
+				iterate_playlist_thread.start()  # I do this because this thread stops if you retry, so we need NEW thread
+			
+			def playlist_stop():
+				if self.settings.get("print"):
+					print(f"Stopped getting playlist {playlist}")
+				utils.hide_show(download_btn, show=False)
+				utils.hide_show(check_all_btn, show=False)
+				utils.hide_show(retry_btn, show=True)
+			
+			retry_btn = Button(playlist_window, bg=back_color, fg=self.disabled_color,
+			                   text="There is no internet connection, retry downloading",
+			                   font=(self.main_font, 14), command=retry_playlist)
+			retry_btn.grid(row=1, column=0, columnspan=3)
+			utils.hide_show(retry_btn, show=False)
+			
+			# Switch all logic
 			def switch_all():
 				"""
 				Switches all checkboxes from ON to OFF and vice versa.
@@ -1401,117 +1509,134 @@ class Main(Tk):
 				if new_height <= self.settings.get("max_window_height"):
 					videos_canvas.configure(height=videos_frm.winfo_height(), width=videos_frm.winfo_reqwidth())
 			
-			variant = self.settings.get('visual_theme')
-			do_preview = self.settings.get("download_prewievs")
-			im_references = []
-			
+			# Utils
 			def change_background(back_color, border_color, frm, *widgets):
 				for w in widgets:
 					w.configure(background=back_color)
 				frm.configure(background=back_color, highlightcolor=border_color)
 			
-			def check_fg(*event, check_label: Label, checkvar: BooleanVar):
+			def checkbox_fg(*event, check_label: Label, checkvar: BooleanVar):
 				if checkvar.get():
 					check_label.configure(fg=self.enabled_color)
 				else:
 					check_label.configure(fg=self.disabled_color)
 			
-			for number, video in enumerate(videos, start=1):
-				video_len = seconds_to_time(video.length)
-				video_name = slowtube.get_real_name(video, self.settings['print'])
-				
-				if variant == 1:
-					if number % 2 == 0:
-						panel_back = self.blue_even_back
-						panel_border = self.blue_even_border
-						panel_text_color = self.blue_even_text
-						panel_highlight_color = self.blue_even_highlight
-						panel_highlight_border = self.blue_even_highlight_border
-					else:
-						panel_back = self.blue_odd_back
-						panel_border = self.blue_odd_border
-						panel_text_color = self.blue_ood_text
-						panel_highlight_color = self.blue_odd_highlight
-						panel_highlight_border = self.blue_odd_highlight_border
-				else:
-					if number % 2 == 0:
-						panel_back = self.purple_even_back
-						panel_border = self.purple_even_border
-						panel_highlight_color = self.purple_even_highlight
-						panel_highlight_border = self.purple_even_highlight_border
-					else:
-						panel_back = self.purple_odd_back
-						panel_border = self.purple_odd_border
-						panel_highlight_color = self.purple_odd_highlight
-						panel_highlight_border = self.purple_odd_highlight_border
-					panel_text_color = self.purple_text
-				
-				dis_video_frm = Frame(videos_frm, background=panel_back, highlightbackground=panel_border,
-				                      highlightthickness=2, height=self.playlist_window_height,
-				                      width=self.playlist_window_width)
-				dis_video_frm.pack(fill=X)
-				dis_video_frm.grid_propagate(False)
-				
-				name_lbl = Label(dis_video_frm, text=f"{number}. {video_name}", font=(self.main_font, 13),
-				                 foreground=panel_text_color,
-				                 background=panel_back, anchor='w')
-				name_lbl.grid(column=1, row=0, sticky='we')
-				
-				info_lbl = Label(dis_video_frm, text=video_len, font=(self.main_font, 12, 'bold'),
-				                 foreground=panel_text_color, background=panel_back)
-				info_lbl.grid(column=1, row=1, sticky="w", columnspan=4)
-				
-				dis_video_frm.grid_columnconfigure(1, weight=1)
-				
-				if do_preview:
-					size = 30  # TODO: Make it bigger
+			# Main loop
+			video_index = 0
+			videos_len = len(videos)
+			
+			def iterate_playlist():
+				nonlocal video_index, video_choices, videos_len
+				for number, video in enumerate(videos[video_index:videos_len], start=video_index + 1):
+					try:
+						print("Trying", video)
+						video_len = seconds_to_time(video.length)
+						video_name = slowtube.get_real_name(video, self.settings['print'])
+					except urllib.error.URLError:
+						print("Error", video)
+						playlist_stop()
+						break
 					
-					response = requests.get(video.thumbnail_url)
-					img = Image.open(BytesIO(response.content)).resize((size, size))
-					img = ImageTk.PhotoImage(img)
-					self.playlist_images.append(img)
+					if variant == 1:
+						if number % 2 == 0:
+							panel_back = self.blue_even_back
+							panel_border = self.blue_even_border
+							panel_text_color = self.blue_even_text
+							panel_highlight_color = self.blue_even_highlight
+							panel_highlight_border = self.blue_even_highlight_border
+						else:
+							panel_back = self.blue_odd_back
+							panel_border = self.blue_odd_border
+							panel_text_color = self.blue_ood_text
+							panel_highlight_color = self.blue_odd_highlight
+							panel_highlight_border = self.blue_odd_highlight_border
+					else:
+						if number % 2 == 0:
+							panel_back = self.purple_even_back
+							panel_border = self.purple_even_border
+							panel_highlight_color = self.purple_even_highlight
+							panel_highlight_border = self.purple_even_highlight_border
+						else:
+							panel_back = self.purple_odd_back
+							panel_border = self.purple_odd_border
+							panel_highlight_color = self.purple_odd_highlight
+							panel_highlight_border = self.purple_odd_highlight_border
+						panel_text_color = self.purple_text
 					
-					im_references.append(Label(dis_video_frm, image=self.playlist_images[-1]))
-					im_references[-1].grid(row=0, column=0, rowspan=2, padx=(5, 10))
-				
-				check_var = BooleanVar()
-				check_var.set(False)
-				check = Label(dis_video_frm, fg=panel_text_color, bg=panel_back, text="✓", font="Arial 24 bold")
-				check.grid(row=0, rowspan=2, column=2)
-				
-				# Both of these are... awful... It's just a way to send every video's widgets in this loop.
-				dis_video_frm.bind('<Enter>', lambda event, pbg=panel_highlight_color, pbd=panel_highlight_border,
-				                                     dvf=dis_video_frm, ch=check, n=name_lbl,
-				                                     i=info_lbl: change_background(pbg, pbd, dvf, ch, n, i))
-				dis_video_frm.bind('<Leave>',
-				                   lambda event, pbg=panel_back, pbd=panel_border, dvf=dis_video_frm, ch=check,
-				                          n=name_lbl, i=info_lbl: change_background(pbg, pbd, dvf, ch, n, i))
-				video_choices.append((video, check_var))
-				check_var.trace("w", lambda *event, c=check, cv=check_var: check_fg(check_label=c, checkvar=cv))
-				check_fg(check_label=check, checkvar=check_var)
-				
-				preview_size = 0
-				if do_preview:
-					preview_size = 30
-				
-				utils.fit_label_text(name_lbl, self.main_font, 13,
-				                     lambda lbl: lbl.winfo_reqwidth() <= self.playlist_window_width - preview_size - 50)
-				
-				if do_preview:
-					parts = (dis_video_frm, name_lbl, info_lbl, im_references[-1], check)
-				else:
-					parts = (dis_video_frm, name_lbl, info_lbl, check)
-				
-				def switch_checkbox(this_check):
-					this_check.set(not this_check.get())
-				
-				for part in parts:  # Change BooleanVar when clicking anywhere in a form
-					part.bind("<Button-1>", lambda *event, this_check=check_var: switch_checkbox(this_check))
-				
-				playlist_window.update()
-				playlist_canvas_logic()
-			download_btn.configure(state="normal")
-			check_all_btn.configure(state="normal")
+					dis_video_frm = Frame(videos_frm, background=panel_back, highlightbackground=panel_border,
+					                      highlightthickness=2, height=self.playlist_window_height,
+					                      width=self.playlist_window_width)
+					dis_video_frm.pack(fill=X)
+					dis_video_frm.grid_propagate(False)
+					
+					name_lbl = Label(dis_video_frm, text=f"{number}. {video_name}", font=(self.main_font, 13),
+					                 foreground=panel_text_color,
+					                 background=panel_back, anchor='w')
+					name_lbl.grid(column=1, row=0, sticky='we')
+					
+					info_lbl = Label(dis_video_frm, text=video_len, font=(self.main_font, 12, 'bold'),
+					                 foreground=panel_text_color, background=panel_back)
+					info_lbl.grid(column=1, row=1, sticky="w", columnspan=4)
+					
+					dis_video_frm.grid_columnconfigure(1, weight=1)
+					
+					preview_size = 0
+					if do_preview:
+						preview_size = self.playlist_window_height - 10
+						
+						try:
+							response = requests.get(video.thumbnail_url)
+							img = Image.open(BytesIO(response.content)).resize((preview_size, preview_size))
+							img = ImageTk.PhotoImage(img)
+							
+							im_references.append(img)
+							preview_lbl = Label(dis_video_frm, image=im_references[-1])
+							preview_lbl.grid(row=0, column=0, rowspan=2, padx=(5, 10))
+						except requests.exceptions.ConnectionError:
+							im_references.append(None)  # Just add a dummy if unable to download preview
+							preview_lbl = Label(dis_video_frm)
+					
+					check_var = BooleanVar()
+					check_var.set(False)
+					check = Label(dis_video_frm, fg=panel_text_color, bg=panel_back, text="✓", font="Arial 24 bold")
+					check.grid(row=0, rowspan=2, column=2)
+					
+					# Both of these are... awful... It's just a way to send every video's widgets in this loop.
+					dis_video_frm.bind('<Enter>', lambda event, pbg=panel_highlight_color, pbd=panel_highlight_border,
+					                                     dvf=dis_video_frm, ch=check, n=name_lbl,
+					                                     i=info_lbl: change_background(pbg, pbd, dvf, ch, n, i))
+					dis_video_frm.bind('<Leave>',
+					                   lambda event, pbg=panel_back, pbd=panel_border, dvf=dis_video_frm, ch=check,
+					                          n=name_lbl, i=info_lbl: change_background(pbg, pbd, dvf, ch, n, i))
+					video_choices.append((video, check_var))
+					check_var.trace("w", lambda *event, c=check, cv=check_var: checkbox_fg(check_label=c, checkvar=cv))
+					checkbox_fg(check_label=check, checkvar=check_var)
+					
+					utils.fit_label_text(name_lbl, self.main_font, 13,
+					                     lambda
+						                     lbl: lbl.winfo_reqwidth() <= self.playlist_window_width - preview_size - 50)
+					
+					if do_preview:
+						parts = (dis_video_frm, name_lbl, info_lbl, preview_lbl, check)
+					else:
+						parts = (dis_video_frm, name_lbl, info_lbl, check)
+					
+					def switch_checkbox(this_check):
+						this_check.set(not this_check.get())
+					
+					for part in parts:  # Change BooleanVar when clicking anywhere in a form
+						part.bind("<Button-1>", lambda *event, this_check=check_var: switch_checkbox(this_check))
+					
+					video_index += 1
+					playlist_window.update()
+					playlist_canvas_logic()
+				else:  # Using For else is bad, but here it's too convenient
+					download_btn.configure(state="normal")
+					check_all_btn.configure(state="normal")
+					print("Else executed")
+				print("Playlist ended")
+			
+			iterate_playlist()
 		
 		def download_all_thread():
 			download_thread = threading.Thread(target=download_all)
@@ -1533,7 +1658,7 @@ class Main(Tk):
 		playlist_window.geometry(self.wm_geometry()[self.wm_geometry().index("+"):])
 		playlist_window.title("Playlist")
 		
-		if video_type == 1:  # This is a video from a playlist, I can download only it.
+		if playlist_type == 1:  # This is a video from a playlist, I can download only it.
 			one_video_btn = Button(playlist_window, bg=back_color, fg=text_color, text="Download one\nvideo",
 			                       font=(self.main_font, 14), command=download_one_thread)
 			one_video_btn.grid(row=1, column=0, padx=10)

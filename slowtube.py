@@ -300,15 +300,15 @@ def quick_select(streams: pytube.query.StreamQuery, quick_quality, quick_type, d
 def get_video(url: str) -> (pytube.YouTube, Exception):
 	try:
 		video = pytube.YouTube(url)
-		trying = video.streams  # I am trying to get video streams here, it will make an error if not possible
+		trying = video.streams  # I am trying to get video data here, it will make an error if not possible
+		trying = video.initial_data
 		return video, None
-	except AgeRestrictedError:
-		print("\nVideo is age restricted, so I'll do nothing about it")
-		return None, "Video is age restricted, or I am hallucinating"
+	except AgeRestrictedError as e:
+		print("\nVideo is age restricted, or I am hallucinating")
+		return None, e
 	except pytube.exceptions.RegexMatchError:
 		return None, None
 	except Exception as e:
-		print(e)
 		return None, e
 
 
@@ -349,8 +349,10 @@ def is_playlist(url: str):
 		return 2
 
 
-def get_playlist(url: str):
-	return pytube.Playlist(url)
+def get_playlist(url: str) -> pytube.Playlist:
+	playlist = pytube.Playlist(url)
+	trying = playlist.title
+	return playlist
 
 
 def merge_audio_video(video_path: str, audio_path: str, update_func, do_print, result_file_format) -> str:

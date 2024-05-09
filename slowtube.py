@@ -303,10 +303,7 @@ def get_video(url: str) -> (pytube.YouTube, Exception):
 		trying = video.streams  # I am trying to get video data here, it will make an error if not possible
 		trying = video.initial_data
 		return video, None
-	except AgeRestrictedError as e:
-		print("\nVideo is age restricted, or I am hallucinating")
-		return None, e
-	except pytube.exceptions.RegexMatchError:
+	except pytube.exceptions.RegexMatchError as e:
 		return None, None
 	except Exception as e:
 		return None, e

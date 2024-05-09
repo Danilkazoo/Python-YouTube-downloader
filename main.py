@@ -169,7 +169,7 @@ class Main(Tk):
 		return df
 	
 	# Gray panels for videos in queue
-	def create_queue_panel(self, name, this_video, this_stream, playlist_name, ext_type):
+	def create_queue_panel(self, video_name, this_video, this_stream, playlist_name, ext_type):
 		"""
 		All this input information is used mostly to find video in a queue to delete it.
 		"""
@@ -185,7 +185,7 @@ class Main(Tk):
 			This function deletes both this frame, AND this video overall frame, including from all queues.
 			So I use the most information about this video to be sure (it won't affect speed that much)
 			"""
-			this_find = (this_video, this_stream, name, this_video_frame, playlist_name, ext_type)
+			this_find = (this_video, this_stream, video_name, this_video_frame, playlist_name, ext_type)
 			self.queue_panels.remove(frm)
 			self.download_queue.remove(this_find)
 			video_frm.destroy()
@@ -211,10 +211,18 @@ class Main(Tk):
 		queue_frm.pack(fill=X)
 		
 		# Info about video in queue
-		Label(queue_frm, text=name, font=(self.main_font, 16, 'bold'), fg=text_color,
-		      bg=back_color, justify="left").grid(row=0, column=0, columnspan=4)
-		Label(queue_frm, text=ext_type, font=(self.main_font, 14, 'bold'), fg=text_color, bg=back_color,
-		      justify='left').grid(row=1, column=0, columnspan=4)
+		video_name_lbl = Label(queue_frm, text=video_name, font=(self.main_font, 16, 'bold'), fg=text_color,
+		                       bg=back_color, justify="left")
+		utils.fit_label_text(video_name_lbl, (self.main_font, 'bold'), 16,
+		                     lambda lbl: lbl.winfo_reqwidth() <= queue_frm.winfo_width())
+		video_name_lbl.grid(row=0, column=0, columnspan=4)
+		
+		queue_info = f"{ext_type} - {slowtube.streams_to_human([this_stream])}"
+		queue_info_lbl = Label(queue_frm, text=queue_info, font=(self.main_font, 14, 'bold'), fg=text_color,
+		                       bg=back_color, justify='left')
+		utils.fit_label_text(queue_info_lbl, (self.main_font, 'bold'), 14,
+		                     lambda lbl: lbl.winfo_reqwidth() <= queue_frm.winfo_width())
+		queue_info_lbl.grid(row=1, column=0, columnspan=4)
 		
 		rem_btn = Button(queue_frm, text="X", font="Arial 20 bold",
 		                 command=lambda: del_this(queue_frm, this_video_frame),
@@ -223,9 +231,9 @@ class Main(Tk):
 		rem_btn.bind("<Enter>", lambda _, w=rem_btn: btn_glow(widget=w, enter=True, glow_color="#777777"))
 		rem_btn.bind("<Leave>", lambda _, w=rem_btn: btn_glow(widget=w, enter=False, back_color=back_color))
 		queue_frm.grid_columnconfigure(1, weight=1)
-		out_hover()
 		queue_frm.bind('<Enter>', on_hover)
 		queue_frm.bind('<Leave>', out_hover)
+		out_hover()
 		queue_frm.grid_propagate(False)
 		self.canvas_resize_logic()
 		return queue_frm, this_video_frame
@@ -263,9 +271,9 @@ class Main(Tk):
 			finally:
 				right_click_menu.grab_release()
 		
+		error = str(error)
 		back_color = self.disabled_color
 		text_color = "black"
-		error = str(error)
 		
 		error_frm = Frame(self.panels_frm, background=back_color, highlightthickness=0, height=self.video_panel_height,
 		                  borderwidth=0)
@@ -295,6 +303,8 @@ class Main(Tk):
 			retry_btn.grid(row=0, column=2, rowspan=2)
 			retry_btn.bind("<Enter>", lambda _, w=retry_btn: btn_glow(widget=w, enter=True, glow_color="#f88"))
 			retry_btn.bind("<Leave>", lambda _, w=retry_btn: btn_glow(widget=w, enter=False, back_color=back_color))
+		elif "age restricted" in error:
+			error = "Video is age restricted, and can't be accessed without logging in... probably"
 		else:
 			print(error)
 			retry_btn = Button()  # Otherwise just create a dummy
@@ -502,9 +512,12 @@ class Main(Tk):
 		                                 justify='left')
 		
 		name = self.video_name
-		width_label = Label(text=name, font=(self.main_font, 16, 'bold')).winfo_reqwidth()
-		self.progress_canvas.create_text(10 + width_label / 2, 25, text=name, font=(self.main_font, 16, 'bold'),
-		                                 fill=text_color)
+		dummy_label = Label(text=name, font=(self.main_font, 16, 'bold'))
+		utils.fit_label_text(dummy_label, (self.main_font, 'bold'), 16,
+		                     lambda lbl: lbl.winfo_reqwidth() <= progress_frm.winfo_width())
+		dummy_label.update_idletasks()
+		self.progress_canvas.create_text(20 + dummy_label.winfo_reqwidth(), 25,
+		                                 text=name, font=dummy_label["font"], fill=text_color)
 		self.panels_frm.update()
 		self.canvas_resize_logic()
 	
@@ -521,6 +534,8 @@ class Main(Tk):
 		
 		percent = 100 - (remaining / stream.filesize) * 100
 		if will_convert:
+			percent /= 2
+		if self.divide_progress:
 			percent /= 2
 		self.progress_panel_update(percent)
 	
@@ -703,7 +718,7 @@ class Main(Tk):
 		if do_preview:
 			size = self.preview_size  # Hardcoded cuz panel itself is hardcoded
 			
-			try:  # TODO: check if this lags, added recently, could lag (even if low chance)
+			try:
 				response = requests.get(self.video.thumbnail_url)
 				
 				img = Image.open(BytesIO(response.content)).resize((size, size))
@@ -719,9 +734,6 @@ class Main(Tk):
 				if self.settings.get("print"):
 					print("Couldn't download preview, most likely no internet connection")
 		
-		downloaded_frm.bind('<Enter>', lambda x: on_hover(highlight_color, highlight_border))
-		downloaded_frm.bind('<Leave>', lambda x: out_hover(back_color, border_color))
-		
 		file_open_btn = Button(downloaded_frm, text="📁", font="Arial 16",
 		                       command=lambda: subprocess.run(
 			                       fr'explorer /select,"{os.path.normpath(delete_location)}"'))
@@ -731,6 +743,9 @@ class Main(Tk):
 		                       font="Arial 16 bold")
 		menu_open_btn.grid(column=5, row=0, rowspan=3)
 		self.panels_arr.append(downloaded_frm)
+		
+		downloaded_frm.bind('<Enter>', lambda x: on_hover(highlight_color, highlight_border))
+		downloaded_frm.bind('<Leave>', lambda x: out_hover(back_color, border_color))
 		out_hover(back_color, border_color)
 		
 		self.download_frame.update()
@@ -751,6 +766,7 @@ class Main(Tk):
 		do_quick = self.settings.get("do_quick")
 		if do_quick:
 			quick_type, quick_qual = self.settings.get("quick_type"), self.settings.get("quick_quality")
+			self.after(500, lambda: self.url_var.set(""))
 		
 		lag_warning_event = self.after(5000, lambda: hide_show(self.lag_warning_lbl, show=True))
 		
@@ -782,16 +798,16 @@ class Main(Tk):
 			close_lag_lbl()
 			return
 		
-		if self.prev_url != url:
+		# Getting video object if needed
+		if self.prev_url != url or self.input_video is None:
 			self.prev_url = url
 			if self.settings.get("print"):
-				print(f"Getting a video from a given url: {url}")
+				print(f"\nGetting a video from a given url: {url}")
 			
-			self.stream_choice.configure(values=())  # So you can't choose previous video when inputting this one
 			if not do_quick:
+				self.stream_choice.configure(values=())  # So you can't choose previous video when inputting this one
 				self.streams_var.set("")
-			else:
-				self.after(500, lambda: self.url_var.set(""))
+			
 			video, error = slowtube.get_video(url)  # If YouTube lags the program will lag here
 			if video is None:
 				if isinstance(error, urllib.error.URLError) and do_quick:  # Retry when fast download
@@ -799,37 +815,18 @@ class Main(Tk):
 					self.url_var.set("")
 				elif error is not None:
 					self.create_error_panel(url, error)
+				elif self.settings.get("print"):
+					print("Incorrect url")
 				close_lag_lbl()
 				return
-			
-			streams = video.streams
 			
 			close_lag_lbl()
 			# I check it the second time in case the user lags, and they had changed video url while getting a response
 			if self.prev_url != url and not do_quick:
 				return
-			# If user didn't change input AND they turned on fast download - empty the input
-			if self.prev_url == url and do_quick:
-				self.url_var.set("")
-		else:
-			if self.input_video is None:  # It means that we couldn't get a video previously -> try again
-				if self.settings.get("print"):
-					print(f"Getting a video from a given url: {url}")
-				
-				video, error = slowtube.get_video(url)
-				if video is None:
-					if isinstance(error, urllib.error.URLError) and do_quick:
-						self.create_retry_panel(url, quick_type, quick_qual)
-						self.url_var.set("")
-					elif error is not None:
-						self.create_error_panel(url, error)
-					close_lag_lbl()
-					return
-				
-				if self.prev_url == url:
-					self.input_video = video
-			else:
-				video = self.input_video
+			self.input_video = video
+			streams = video.streams
+		else:  # I already have a saved input_video object (url is the same
 			streams = self.input_video.streams
 			close_lag_lbl()
 		
@@ -868,6 +865,7 @@ class Main(Tk):
 		self.create_progress_panel()
 		self.video.register_on_progress_callback(self.progress_panel_donwloading)
 		
+		self.divide_progress = False  # It will divide progress if we download BOTH audio and video
 		audio_path = None
 		
 		if self.this_playlist_save_path:
@@ -878,6 +876,7 @@ class Main(Tk):
 		# If we need audio and we have only video - download purely audio and merge with video
 		if self.settings.get("download_type") == "both":
 			audio_stream = self.video.streams.filter(only_audio=True).order_by('abr').last()
+			self.divide_progress = True
 			
 			audio_filename = f"{pv_sanitize(video_name, replacement_text=' ')} only_audio_sussy_baka.webm"
 			prefix = utils.calculate_prefix(save_path, audio_filename)  # Shouldn't be needed actually
@@ -900,6 +899,7 @@ class Main(Tk):
 				print("Selected audio:", audio_stream)
 				print("Temp audio path:", audio_path)
 		
+		self.divide_progress = False
 		downloaded_path, error = slowtube.download_video(stream, save_path, **self.settings, name=video_name,
 		                                                 update_func=self.progress_panel_convert, audio_path=audio_path)
 		
@@ -1132,13 +1132,14 @@ class Main(Tk):
 		                                                            playlist_spam_choice))
 		playlist_spam_choice.grid(row=4, column=6, padx=10, pady=10, sticky="w")
 		
+		# It will be visible ONLY with add_debug setting, it isn't on Github cuz only I need to debug, I guess
 		debug_var = BooleanVar()
 		debug_choice = Checkbutton(settings_window, text="hey wanna sum spam ?", variable=debug_var, fg=text_color,
 		                           bg=self.df_frame_background_color, font=self.small_font)
 		debug_var.set(self.settings['print'])
 		debug_var.trace('w', lambda *event: update_checkbox("print", debug_var, debug_choice))
 		if self.settings.get("add_debug"):  # I can turn debug on and off, but only with my settings
-			debug_choice.grid(row=10, column=6, padx=10, pady=10, sticky='w')
+			debug_choice.grid(row=10, column=4, padx=10, pady=10, sticky='w')
 		
 		theme_lbl = Label(settings_window, text="Visual style", font=(self.main_font, 14),
 		                  bg=self.df_frame_background_color, fg=text_color)
@@ -1330,6 +1331,8 @@ class Main(Tk):
 						self.create_retry_panel(url, download_ext, download_qual)
 					elif error is not None:
 						self.create_error_panel(url, error)  # Something went wrong so I show it
+					elif self.settings.get("print"):
+						print("Incorrect url")
 					continue
 				
 				input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings.get("print"))
@@ -1350,6 +1353,8 @@ class Main(Tk):
 					self.create_retry_panel(url, download_ext, download_qual)
 				elif error is not None:
 					self.create_error_panel(url, error)  # Something went wrong so I show it
+				elif self.settings.get("print"):
+					print("Incorrect url")
 				return
 			
 			input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings.get("print"))

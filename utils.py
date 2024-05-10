@@ -1,6 +1,6 @@
 import os
 import shutil
-from tkinter import Widget, Toplevel, Entry, Tk, Label
+from tkinter import Widget, Toplevel, Entry, Tk, Label, Menu, Event
 
 
 def btn_glow(*event, widget: Widget, enter: bool, back_color="#313131", glow_color="#414141"):
@@ -147,3 +147,25 @@ def calculate_prefix(file_path: str, file_name: str) -> str:
 			prefix += 1
 		prefix = f"{prefix} "
 	return prefix
+
+
+def popup_menu(right_click_menu: Menu, event: Event = None, manual_x: int = None, manual_y: int = None):
+	"""
+	General function to handle popups when you right-click.
+	If you bind it to <Button-3> (or other) events - it will send an event as first parameter.
+	If you want to summon it manually at coordinates - send them
+	:param right_click_menu: What menu to popup.
+	:param event: Tkinter event used to get X and Y cords.
+	:param manual_x: If you want to summon a menu at chosen cords - send them.
+	:param manual_y: Same as X.
+	:return:
+	"""
+	if manual_x and manual_y:
+		x, y = manual_x, manual_y
+	else:
+		x, y = event.x_root, event.y_root
+	
+	try:
+		right_click_menu.tk_popup(x, y, 0)
+	finally:
+		right_click_menu.grab_release()

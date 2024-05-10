@@ -260,17 +260,6 @@ class Main(Tk):
 			self.clipboard_clear()
 			self.clipboard_append(url)
 		
-		def rmb_popup(event=None, widget=None):
-			if event is None:
-				x, y = widget.winfo_rootx(), widget.winfo_rooty()
-			else:
-				x, y = event.x_root, event.y_root
-			
-			try:
-				right_click_menu.tk_popup(x, y, 0)
-			finally:
-				right_click_menu.grab_release()
-		
 		error = str(error)
 		back_color = self.disabled_color
 		text_color = "black"
@@ -289,6 +278,7 @@ class Main(Tk):
 		del_btn.bind("<Enter>", lambda _, w=del_btn: btn_glow(widget=w, enter=True, glow_color="#f88"))
 		del_btn.bind("<Leave>", lambda _, w=del_btn: btn_glow(widget=w, enter=False, back_color=back_color))
 		
+		retry_btn = Button()  # I create a dummy, will change it if reconnect is needed
 		# It's a stupid way but it works, lol
 		if error == "<urlopen error [Errno 11001] getaddrinfo failed>":
 			def recconnect():
@@ -307,7 +297,6 @@ class Main(Tk):
 			error = "Video is age restricted, and can't be accessed without logging in... probably"
 		else:
 			print(error)
-			retry_btn = Button()  # Otherwise just create a dummy
 		
 		error_lbl = Label(error_frm, text=error, font=(self.main_font, 16, 'bold'), fg=text_color,
 		                  bg=back_color, justify="left")
@@ -326,7 +315,7 @@ class Main(Tk):
 		right_click_menu.add_command(label='Copy a link', command=lambda: url_to_clipboard(url))
 		
 		for responsive_part in (error_frm, error_lbl, url_lbl, del_btn, retry_btn):
-			responsive_part.bind("<Button-3>", rmb_popup)
+			responsive_part.bind("<Button-3>", lambda event: utils.popup_menu(right_click_menu, event))
 		
 		error_frm.columnconfigure(0, weight=1)
 		out_hover()
@@ -364,17 +353,6 @@ class Main(Tk):
 		def new_thread_retry():
 			retry_thread = threading.Thread(target=self.retry_requests)
 			retry_thread.start()
-		
-		def rmb_popup(event=None, widget=None):
-			if event is None:
-				x, y = widget.winfo_rootx(), widget.winfo_rooty()
-			else:
-				x, y = event.x_root, event.y_root
-			
-			try:
-				right_click_menu.tk_popup(x, y, 0)
-			finally:
-				right_click_menu.grab_release()
 		
 		if len(self.retry_list) % 2:
 			back_color = "#bbb"
@@ -423,7 +401,7 @@ class Main(Tk):
 		right_click_menu.add_command(label='Copy a link', command=lambda: url_to_clipboard(url))
 		
 		for responsive_part in (retry_frm, del_btn, retry_btn, info_lbl, url_lbl):
-			responsive_part.bind("<Button-3>", rmb_popup)
+			responsive_part.bind("<Button-3>", lambda event: utils.popup_menu(right_click_menu, event))
 		
 		self.retry_list.append(this_info)
 		retry_frm.columnconfigure(0, weight=1)
@@ -518,8 +496,21 @@ class Main(Tk):
 		dummy_label.update_idletasks()
 		self.progress_canvas.create_text(20 + dummy_label.winfo_reqwidth(), 25,
 		                                 text=name, font=dummy_label["font"], fill=text_color)
+		
 		self.panels_frm.update()
 		self.canvas_resize_logic()
+		
+		# Right click actions
+		this_url = self.video.watch_url
+		
+		def url_to_clipboard(url):
+			self.clipboard_clear()
+			self.clipboard_append(url)
+		
+		right_click_menu = Menu(progress_frm, tearoff=0, font=(self.main_font, 12))
+		right_click_menu.add_command(label='Copy video url', command=lambda: url_to_clipboard(this_url))
+		right_click_menu.add_command(label='Cancel download', command=lambda: ...)
+		self.progress_canvas.bind("<Button-3>", lambda event: utils.popup_menu(right_click_menu, event))
 	
 	def progress_panel_update(self, percent: float):
 		cords = self.progress_canvas.coords(1)
@@ -681,19 +672,8 @@ class Main(Tk):
 			title_lbl = Label(downloaded_frm, foreground=text_color, background=back_color)  # Dummy
 		title_lbl.grid(column=2, row=1, columnspan=4, sticky="e", padx=(0, 100))
 		
-		def popup(event=None, widget=None):
-			if event is None:
-				x, y = widget.winfo_rootx(), widget.winfo_rooty()
-			else:
-				x, y = event.x_root, event.y_root
-			
-			try:
-				right_click_menu.tk_popup(x, y, 0)
-			finally:
-				right_click_menu.grab_release()
-		
 		for responsive_part in (downloaded_frm, name_lbl, info_lbl, title_lbl):
-			responsive_part.bind("<Button-3>", popup)
+			responsive_part.bind("<Button-3>", lambda event: utils.popup_menu(right_click_menu, event))
 			responsive_part.bind("<Button-1>", lambda event: url_to_clipboard(this_url, event))
 		
 		def on_hover(highlight_color, highlight_border):
@@ -727,7 +707,7 @@ class Main(Tk):
 				
 				preview = Label(downloaded_frm, image=self.preview_images[-1])
 				preview.grid(row=0, column=0, rowspan=2, padx=(5, 10))
-				preview.bind("<Button-3>", popup)
+				preview.bind("<Button-3>", lambda event: utils.popup_menu(right_click_menu, event))
 				preview.bind("<Button-1>", lambda event: url_to_clipboard(this_url, event))
 				del_image = self.preview_images[-1]
 			except requests.exceptions.ConnectionError:
@@ -739,8 +719,9 @@ class Main(Tk):
 			                       fr'explorer /select,"{os.path.normpath(delete_location)}"'))
 		file_open_btn.grid(column=4, row=0, rowspan=3)  # I used subprocess because it highlights a file
 		
-		menu_open_btn = Button(downloaded_frm, text=":", command=lambda: popup(widget=menu_open_btn),
-		                       font="Arial 16 bold")
+		menu_open_btn = Button(downloaded_frm, text=":", font="Arial 16 bold",
+		                       command=lambda: utils.popup_menu(right_click_menu, manual_x=menu_open_btn.winfo_rootx(),
+		                                                        manual_y=menu_open_btn.winfo_rooty()))
 		menu_open_btn.grid(column=5, row=0, rowspan=3)
 		self.panels_arr.append(downloaded_frm)
 		
@@ -1026,14 +1007,6 @@ class Main(Tk):
 			full_update()
 			settings_window.destroy()
 		
-		def save_path_rmb_popup(event):
-			x, y = event.x_root, event.y_root
-			
-			try:
-				save_path_rmb_menu.tk_popup(x, y, 0)
-			finally:
-				save_path_rmb_menu.grab_release()
-		
 		def menu_path_insert():
 			save_path_var.set("")
 			save_path_en.event_generate("<<Paste>>")
@@ -1091,7 +1064,7 @@ class Main(Tk):
 		save_path_rmb_menu = Menu(settings_window, tearoff=0, font=(self.main_font, 12))
 		save_path_rmb_menu.add_command(label='Insert', command=menu_path_insert)
 		save_path_rmb_menu.add_command(label='Copy', command=menu_path_copy)
-		save_path_en.bind("<Button-3>", save_path_rmb_popup)
+		save_path_en.bind("<Button-3>", lambda event: utils.popup_menu(save_path_rmb_menu, event))
 		
 		save_path_btn = Button(settings_window, text='📁', background=back_color, foreground=text_color, font="Arial 18",
 		                       command=btn_path_insert)

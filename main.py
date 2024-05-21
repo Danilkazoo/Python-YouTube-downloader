@@ -502,17 +502,24 @@ class Main(Tk):
 		
 		# Right click actions
 		this_url = self.video.watch_url
+		self.stop_downloading = False
 		
 		def url_to_clipboard(url):
 			self.clipboard_clear()
 			self.clipboard_append(url)
 		
+		def stop_download():
+			self.stop_downloading = True
+		
 		right_click_menu = Menu(progress_frm, tearoff=0, font=(self.main_font, 12))
 		right_click_menu.add_command(label='Copy video url', command=lambda: url_to_clipboard(this_url))
-		right_click_menu.add_command(label='Cancel download', command=lambda: ...)
+		right_click_menu.add_command(label='Cancel download', command=stop_download)
 		self.progress_canvas.bind("<Button-3>", lambda event: utils.popup_menu(right_click_menu, event))
 	
 	def progress_panel_update(self, percent: float):
+		if self.stop_downloading:  # This will be called from a download thread
+			raise utils.StopDownloading
+		
 		cords = self.progress_canvas.coords(1)
 		cords[2] = (self.progress_frm.winfo_width() / 100) * percent
 		
@@ -841,12 +848,17 @@ class Main(Tk):
 			hide_show(self.download_retry_btn, show=True)
 			self.update()
 		
+		def stop_downloading():  # Called when user decides to stop the download / converting
+			self.delete_progress_panel()
+			self.this_video_frame.destroy()
+			self.downloading_now -= 1
+			self.update()
+		
 		video_name = self.video_name
 		
 		self.create_progress_panel()
 		self.video.register_on_progress_callback(self.progress_panel_donwloading)
 		
-		self.divide_progress = False  # It will divide progress if we download BOTH audio and video
 		audio_path = None
 		
 		if self.this_playlist_save_path:
@@ -864,12 +876,22 @@ class Main(Tk):
 			audio_filename = f"{prefix}{audio_filename}"
 			try:
 				audio_path = audio_stream.download(output_path=save_path, filename=audio_filename)
-			except urllib.error.URLError:  # User had no internet when downloading
+			except urllib.error.URLError:
 				retry_later()
 				if self.settings.get("print"):
 					print("User failed to download an audio file, likely no connection")
 				
-				# Delete created audio file (it's empty)
+				# Delete created incomplete audio file
+				audio_path = os.path.join(save_path, audio_filename)
+				if os.path.exists(audio_path):
+					os.remove(audio_path)
+				return
+			except utils.StopDownloading:
+				if self.settings.get("print"):
+					print("User decided to stop downloading on a audio_file")
+				stop_downloading()
+				
+				# Delete created incomplete audio file
 				audio_path = os.path.join(save_path, audio_filename)
 				if os.path.exists(audio_path):
 					os.remove(audio_path)
@@ -884,21 +906,28 @@ class Main(Tk):
 		downloaded_path, error = slowtube.download_video(stream, save_path, **self.settings, name=video_name,
 		                                                 update_func=self.progress_panel_convert, audio_path=audio_path)
 		
-		if isinstance(error, urllib.error.URLError):  # User had no internet when downloading
-			retry_later()
-			if self.settings.get("print"):
-				print("User failed to download a file, likely no connection")
-			
-			# Delete created audio and video files
-			if audio_path and os.path.exists(audio_path):
-				os.remove(audio_path)
-			
-			if os.path.exists(downloaded_path):
-				os.remove(downloaded_path)
-			
+		if error is None:
+			self.create_downloaded_panel(downloaded_path, downloaded_stream=stream)
 			return
 		
-		self.create_downloaded_panel(downloaded_path, downloaded_stream=stream)
+		if isinstance(error, utils.StopDownloading):
+			if self.settings.get("print"):
+				print("User decided to stop downloading on a final file")
+			stop_downloading()
+		elif isinstance(error, urllib.error.URLError):  # User had no internet when downloading
+			if self.settings.get("print"):
+				print("User failed to download a file, likely no connection")
+			retry_later()
+		elif self.settings.get("print"):
+			print("Something unexpected happened")
+			print(error)
+		
+		# Delete created audio and video files
+		if audio_path and os.path.exists(audio_path):
+			os.remove(audio_path)
+		
+		if os.path.exists(downloaded_path):
+			os.remove(downloaded_path)
 	
 	# Settings
 	def create_settings_window(self):

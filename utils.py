@@ -169,3 +169,8 @@ def popup_menu(right_click_menu: Menu, event: Event = None, manual_x: int = None
 		right_click_menu.tk_popup(x, y, 0)
 	finally:
 		right_click_menu.grab_release()
+
+
+class StopDownloading(Exception):
+	"""Raised only to stop downloading by user"""
+	pass

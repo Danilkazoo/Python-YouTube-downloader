@@ -1,6 +1,5 @@
 import os
 import subprocess
-import urllib.error
 from math import fabs
 
 import pytube
@@ -10,7 +9,8 @@ from pytube.exceptions import AgeRestrictedError
 import utils
 
 
-def convert_to_extension(file_path: str, update_func, final_extension, do_print, stream: pytube.Stream) -> str:
+def convert_to_extension(file_path: str, update_func, final_extension: str, do_print: bool, stream: pytube.Stream) -> (
+		str, utils.StopDownloading | None):
 	"""
 	Converts already downloaded file to another extension.
 	:param file_path: A path to a file to convert.
@@ -18,29 +18,28 @@ def convert_to_extension(file_path: str, update_func, final_extension, do_print,
 	:param final_extension: What is a desired extension.
 	:param do_print: Should it print
 	:param stream: Downloaded video stream.
-	:return: Real path of a new converted file.
+	:return: Real path of a new converted file, Error if it has happened.
 	"""
 	
 	path, curr_ext = os.path.splitext(file_path)
 	if curr_ext == f".{final_extension}":
-		print("Somehow I don't need to convert ? Something's broken.")
-		return
+		print("\n\nSomehow I don't need to convert ? Something's broken.\n\n")
+		return file_path
 	
 	path = path[:-10]  # To files that I will convert I add "to_convert"
+	return_path = f"{path}.{final_extension}"
 	
 	if final_extension == "mp3":
 		abr = stream.abr[:-4]
-		return_path = f"{path}.{final_extension}"
 		cmd = f'ffmpeg -i "{file_path}" -vn -ab {abr}k "{return_path}"'
 	elif final_extension == "mp4":
-		return_path = f"{path}.{final_extension}"
 		cmd = f'ffmpeg -i "{file_path}" -c copy "{return_path}"'
 	elif final_extension == "webm" and curr_ext == ".mp4":  # .webm TO .mp4 is a lot harder and slower, and needs this.
-		return_path = f"{path}.webm"
 		cmd = fr'ffmpeg -i "{file_path}" -q:v 10 -c:v libvpx -c:a libvorbis "{return_path}"'
 	else:
-		print("Incorrect extensions, go away")
-		return ""
+		print("\n\nIncorrect extensions, go away")  # I'd be scared if that line of code HAS executed
+		print(f"{final_extension = }\n{curr_ext = }\n{return_path = }\n\n")
+		return return_path
 	
 	if do_print:
 		print("Resultant cmd:\n", cmd)
@@ -60,10 +59,14 @@ def convert_to_extension(file_path: str, update_func, final_extension, do_print,
 				continue
 			
 			converted_time = time_to_secs(realtime_output[first_index + 5:last_index].strip())
-			update_func(converted_time)
+			try:
+				update_func(converted_time)
+			except utils.StopDownloading as error:
+				os.remove(file_path)
+				return file_path, error
 	
 	os.remove(file_path)
-	return return_path
+	return return_path, None
 
 
 def get_real_name(video: pytube.YouTube, do_print: bool) -> str:
@@ -203,7 +206,7 @@ def download_video(stream: pytube.streams.Stream, full_path: str, **settings) ->
 	:param stream: What stream to download, it should be already be chosen.
 	:param full_path: Full path where to download, exactly - what file.
 	:param settings: Some settings to download, mainly download_type, print, name and extension
-	:return: Return real path of a downloaded file. And an exception if there's no internet.
+	:return: Return real path of a downloaded file. And an exception if something happened when when downloading
 	"""
 	
 	save_path = full_path  # It is here to send a real path, not in settings save_path in settings
@@ -230,7 +233,7 @@ def download_video(stream: pytube.streams.Stream, full_path: str, **settings) ->
 	try:
 		real_path = stream.download(output_path=save_path, filename_prefix=prefix,
 		                            filename=f"{final_name}{starting_extension}")
-	except urllib.error.URLError as error:
+	except Exception as error:
 		real_path = os.path.join(save_path, f"{prefix}{final_name}{starting_extension}")
 		return real_path, error
 	
@@ -240,13 +243,16 @@ def download_video(stream: pytube.streams.Stream, full_path: str, **settings) ->
 		print(r"Real:", real_path)
 	
 	if settings.get('download_type') == "both":
-		real_path = merge_audio_video(real_path, settings.get("audio_path"), settings.get("update_func"),
-		                              settings.get("print"), final_extension)
+		real_path, error = merge_audio_video(real_path, settings.get("audio_path"), settings.get("update_func"),
+		                                     settings.get("print"), final_extension)
 	elif f".{final_extension}" != starting_extension:
-		real_path = convert_to_extension(file_path=real_path, update_func=settings.get("update_func"),
-		                                 final_extension=final_extension, do_print=settings.get("print"), stream=stream)
-	
-	return real_path, None
+		real_path, error = convert_to_extension(file_path=real_path, update_func=settings.get("update_func"),
+		                                        final_extension=final_extension, do_print=settings.get("print"),
+		                                        stream=stream)
+	else:
+		print("Something is wrong, again, shouldn't happen anyways")
+		error = Exception
+	return real_path, error
 
 
 def quick_select(streams: pytube.query.StreamQuery, quick_quality, quick_type, do_print: bool) -> pytube.streams.Stream:
@@ -352,19 +358,27 @@ def get_playlist(url: str) -> pytube.Playlist:
 	return playlist
 
 
-def merge_audio_video(video_path: str, audio_path: str, update_func, do_print, result_file_format) -> str:
+def merge_audio_video(video_path: str, audio_path: str, update_func, do_print: bool,
+                      result_file_format: str) -> (str, utils.StopDownloading | None):
 	"""
 	Merges two files - one with audio only, and one with only video.
-	:return: Path of a final file.
+	Final merged file will be saved at VIDEO file location.
+	:param video_path: A path to a video file.
+	:param audio_path: A path to an audio file.
+	:param update_func: A function to run while merging files.
+	:param do_print: Should a function print debug info.
+	:param result_file_format: Final file format that you need - mp4 or webm.
+	:return: Path of a final file, Error if it has occurred.
 	"""
 	path, curr_ext = os.path.splitext(video_path)
 	path = path[:-15]  # 15 is len of (audio_only_sussy_baka) I add to differentiate merge files
+	final_path = f"{path}.{result_file_format}"
 	
 	# mp4 to webm is special in it's blasphemy, it is a lot harder to convert, and needs additional ffmpeg "submodule"
 	if result_file_format == "webm" and curr_ext == ".mp4":
-		cmd = fr'ffmpeg -i "{video_path}" -i "{audio_path}" -q:v 10 -c:v libvpx -c:a libvorbis "{path}.webm"'
+		cmd = fr'ffmpeg -i "{video_path}" -i "{audio_path}" -q:v 10 -c:v libvpx -c:a libvorbis "{final_path}"'
 	else:
-		cmd = rf'ffmpeg -i "{video_path}" -i "{audio_path}" -c copy "{path}.{result_file_format}"'
+		cmd = rf'ffmpeg -i "{video_path}" -i "{audio_path}" -c copy "{final_path}"'
 	
 	if do_print:
 		print("We need to do a merge")
@@ -385,11 +399,16 @@ def merge_audio_video(video_path: str, audio_path: str, update_func, do_print, r
 				continue
 			
 			converted_time = time_to_secs(realtime_output[first_index + 5:last_index].strip())
-			update_func(converted_time)
+			try:
+				update_func(converted_time)
+			except utils.StopDownloading as error:
+				os.remove(video_path)
+				os.remove(audio_path)
+				return final_path, error
 	
 	os.remove(video_path)
 	os.remove(audio_path)
-	return f"{path}.{result_file_format}"
+	return final_path, None
 
 
 def sanitize_playlist_name(name) -> str:

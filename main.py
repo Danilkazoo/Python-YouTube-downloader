@@ -1409,8 +1409,9 @@ class Main(Tk):
 			
 			try:
 				playlist = slowtube.get_playlist(url)
-			except urllib.error.URLError as e:
-				self.create_error_panel(url, e)
+			except urllib.error.URLError as error:
+				self.create_error_panel(url, error, add_retry=True)
+				utils.hide_show(self.lag_warning_lbl, show=True)
 				return
 			
 			if self.settings.get("create_new_files"):
@@ -1445,15 +1446,11 @@ class Main(Tk):
 				nonlocal ignore_scrolling
 				ignore_scrolling = True
 				
-				download_ext = ext_var.get()
+				download_type = ext_var.get()
 				download_qual = qual_var.get()
 				playlist_window.withdraw()
 				self.overrideredirect(False)  # So windows sees only the main_window
 				self.focus_set()
-				
-				print("Downloading")
-				print(threading.current_thread())
-				print(video_choices)
 				
 				if self.settings.get("create_new_files"):
 					this_playlist_name = slowtube.sanitize_playlist_name(playlist.title)
@@ -1461,24 +1458,22 @@ class Main(Tk):
 				else:
 					new_playlist_path = None
 				
+				if self.settings.get("print"):
+					print("Downloading selected videos from playlist", playlist)
+				
 				for video, do_download in video_choices:
-					if do_download.get():
-						try:
-							streams = video.streams
-						except urllib.error.URLError:
-							self.create_retry_panel(url, download_ext, download_qual, new_playlist_path)
-						
-						input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings.get("print"))
-						selected_stream = slowtube.quick_select(input_streams, download_qual, download_ext,
-						                                        do_print=self.settings.get("print"))
-						self.add_to_download_queue(download_stream=selected_stream, input_video=video,
-						                           this_playlist_path=new_playlist_path,
-						                           download_type_name=download_ext)
+					if not do_download.get():
+						continue
+					
+					if self.settings.get("print"):
+						print("Downloading selected video", video)
+					self.create_retry_panel(url, download_type, download_qual, new_playlist_path)
 				
 				playlist_window.destroy()
 				im_references.clear()
 				video_choices.clear()
 				del im_references, video_choices
+				self.retry_requests()
 			
 			def new_thread_download(video_choices, im_references):
 				download_thread = threading.Thread(target=download, args=(video_choices, im_references))
@@ -1488,6 +1483,7 @@ class Main(Tk):
 				self.overrideredirect(False)
 				self.update()
 				playlist_window.destroy()
+				self.focus_set()
 			
 			self.overrideredirect(True)  # So windows sees only the playlist window
 			playlist_window.protocol("WM_DELETE_WINDOW", onclose)
@@ -1500,8 +1496,9 @@ class Main(Tk):
 				playlist = slowtube.get_playlist(url)
 				videos = playlist.videos
 			except urllib.error.URLError as e:
-				self.create_error_panel(url, e)
+				self.create_error_panel(url, e, add_retry=True)
 				onclose()
+				utils.hide_show(self.lag_warning_lbl, show=True)
 				return
 			
 			variant = self.settings.get('visual_theme')

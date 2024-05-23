@@ -1429,26 +1429,16 @@ class Main(Tk):
 			self.retry_requests()
 		
 		def nah_download_one():
-			download_ext = ext_var.get()
+			download_type = ext_var.get()
 			download_qual = qual_var.get()
 			
 			playlist_window.destroy()
 			
-			video, error = slowtube.get_video(url)
-			if video is None:
-				if isinstance(error, urllib.error.URLError):
-					self.create_retry_panel(url, download_ext, download_qual)
-				elif error is not None:
-					self.create_error_panel(url, error)  # Something went wrong so I show it
-				elif self.settings.get("print"):
-					print("Incorrect url")
-				return
+			if self.settings.get("print"):
+				print(f"Downloading all videos from playlist: {url}")
 			
-			input_streams = slowtube.filter_streams(video.streams, download_ext, self.settings.get("print"))
-			selected_stream = slowtube.quick_select(input_streams, download_qual, download_ext,
-			                                        do_print=self.settings.get("print"))
-			self.add_to_download_queue(download_stream=selected_stream, input_video=video,
-			                           download_type_name=download_ext)
+			self.create_retry_panel(url, download_type, download_qual)
+			self.retry_requests()
 		
 		def wanna_choose():
 			def download(video_choices: list, im_references: list):

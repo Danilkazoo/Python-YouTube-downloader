@@ -239,7 +239,7 @@ class Main(Tk):
 		return queue_frm, this_video_frame
 	
 	# Panels for errors
-	def create_error_panel(self, url, error):
+	def create_error_panel(self, url: str, error: Exception | str, add_retry: bool = False):
 		"""
 		A panel for general errors.
 		If error is internet connection (urlopen error) - it'll have a button to input given url into entry
@@ -279,24 +279,25 @@ class Main(Tk):
 		del_btn.bind("<Leave>", lambda _, w=del_btn: btn_glow(widget=w, enter=False, back_color=back_color))
 		
 		retry_btn = Button()  # I create a dummy, will change it if reconnect is needed
-		# It's a stupid way but it works, lol
 		if error == "<urlopen error [Errno 11001] getaddrinfo failed>":
+			error = "Couldn't get response from url"
+		elif "age restricted" in error:
+			error = "Video is age restricted, and can't be accessed without logging in... probably"
+		else:
+			print(error)
+		
+		if add_retry:
 			def recconnect():
 				"""Just inputs given url into entry"""
 				self.url_var.set(url)
 				del_this(error_frm)
 			
-			error = "Couldn't get response from url"
 			retry_btn = Button(error_frm, text="Retry", font="Arial 18 bold",
 			                   fg=text_color, bg=back_color, relief="flat",
 			                   command=recconnect)
 			retry_btn.grid(row=0, column=2, rowspan=2)
 			retry_btn.bind("<Enter>", lambda _, w=retry_btn: btn_glow(widget=w, enter=True, glow_color="#f88"))
 			retry_btn.bind("<Leave>", lambda _, w=retry_btn: btn_glow(widget=w, enter=False, back_color=back_color))
-		elif "age restricted" in error:
-			error = "Video is age restricted, and can't be accessed without logging in... probably"
-		else:
-			print(error)
 		
 		error_lbl = Label(error_frm, text=error, font=(self.main_font, 16, 'bold'), fg=text_color,
 		                  bg=back_color, justify="left")
@@ -743,48 +744,133 @@ class Main(Tk):
 		download_thread = threading.Thread(target=self.download_next)  # Added recently, should not break but who knows
 		download_thread.start()
 	
-	def check_url(self):
+	# Error handling for getting video
+	def video_error_handling(self, video, error: Exception, url: str, do_quick: bool, quick_type: str = None,
+	                         quick_qual: str = None) -> bool:
+		"""
+		This function is called after slowtube.get_video, it handles all video error logic.
+		:param video: Video you got from get_video.
+		:param error: Error you got from get_video.
+		:param url: Url of a video you got, used for error panels.
+		:param do_quick: If a function acts as a quick download - some panels will try to retry as quick type
+		:param quick_type: If do_quick is True - insert quick_type.
+		:param quick_qual: If do_quick is True - insert quick_quality
+		:return: True/False if you should end a function (return)
+		"""
+		if video:
+			return False
+		
+		if error is None and self.settings.get("print"):
+			print("Incorrect url")
+		
+		# No internet
+		elif isinstance(error, urllib.error.URLError):
+			if do_quick:  # Retry with current settings when fast download
+				self.create_retry_panel(url, quick_type, quick_qual)
+				self.url_var.set("")
+			else:
+				self.create_error_panel(url, error, add_retry=True)
+		
+		elif isinstance(error, AttributeError):
+			#  This is an error that... started randomly occurring in pytube ?
+			#  I can fix this locally by changing pytube cipher.py, but that CAN be bad
+			#  So I will not change it - an error is random as it seems, it could or could not happen with same input
+			#  So, I will just try to retry connection a few times, if it keeps happening - so be bruh
+			if self.settings.get("print"):
+				print("\nThis is an error that... started randomly occuring in pytube...\n"
+				      "Retry connection 3 times")
+			for retries in range(1, 4):
+				print(f"Attempt {retries}")
+				video, error = slowtube.get_video(url)
+				if video:
+					print(f"Success ?\n{video=}\n{error=}")
+					
+					if do_quick:  # If do_quick then just add a video to queue
+						streams = video.streams
+						input_streams = slowtube.filter_streams(streams, quick_type, self.settings.get("print"))
+						selected_stream = slowtube.quick_select(input_streams, quick_qual, quick_type,
+						                                        self.settings.get("print"))
+						
+						if self.settings.get("print"):
+							print("\nSelected stream:", selected_stream)
+						
+						self.add_to_download_queue(download_stream=selected_stream, input_video=video,
+						                           download_type_name=quick_type)
+					else:  # if not - just input video for user to choose what to download
+						if self.prev_url != url:
+							return True
+						self.input_video = video
+						self.check_url(url)
+						return True
+			if self.settings.get("print"):
+				print("No success")
+			
+			if do_quick:  # Retry with current settings when fast download
+				self.create_retry_panel(url, quick_type, quick_qual)
+				self.url_var.set("")
+			else:
+				self.create_error_panel(url, "Random pytube js error occurred, retry later", add_retry=True)
+		
+		else:
+			self.create_error_panel(url, error)
+			if self.settings.get("print"):
+				raise error
+		
+		return True
+	
+	def check_url(self, custom_url=None):
 		"""
 		Gets all starting information about an inputted url - getting video, streams, playlists
 		"""
-		url = self.url_var.get()
-		if url == '':
+		
+		if custom_url:
+			url = custom_url
+		else:
+			url = self.url_var.get()
+			if url == '':
+				return
+		
+		url_type = slowtube.get_url_type(url)
+		
+		if url_type == 0:
+			if self.settings.get("print"):
+				print("\nInvalid url")
+			self.en_url.configure(bg=self.disabled_color)
 			return
+		self.en_url.configure(bg=self.df_widgets_bg_col)
 		
-		do_quick = self.settings.get("do_quick")
-		if do_quick:
-			quick_type, quick_qual = self.settings.get("quick_type"), self.settings.get("quick_quality")
-			self.after(500, lambda: self.url_var.set(""))
-		
-		lag_warning_event = self.after(5000, lambda: hide_show(self.lag_warning_lbl, show=True))
-		
-		# This event will show the user that YouTube lags at the moment, so they see that everything still works
-		# and this small function will turn this warning off, it should only be visible when lagging
-		def close_lag_lbl():
-			self.after_cancel(lag_warning_event)
-			hide_show(self.lag_warning_lbl, show=False)
-		
-		is_playlist = slowtube.is_playlist(url)
-		if is_playlist == 1:
+		if url_type == 2:
 			if self.settings.get('print'):
 				print("\nThis is a video from a Playlist")
 			
 			# If this setting is on than I open playlist only with pure playlist url (2nd IF)
 			if not self.settings.get('stop_spamming_playlists'):
-				playlist_window_thread = threading.Thread(target=self.create_playlist_window, args=(url, is_playlist))
+				playlist_window_thread = threading.Thread(target=self.create_playlist_window, args=(url, url_type))
 				playlist_window_thread.start()
-				
-				close_lag_lbl()
 				return
-		elif is_playlist == 2:
+		elif url_type == 3:
 			if self.settings.get('print'):
 				print("\nThis is a Playlist")
 			
-			playlist_window_thread = threading.Thread(target=self.create_playlist_window, args=(url, is_playlist))
+			playlist_window_thread = threading.Thread(target=self.create_playlist_window, args=(url, url_type))
 			playlist_window_thread.start()
-			
-			close_lag_lbl()
 			return
+		
+		# This event will show the user that YouTube lags at the moment, so they see that everything still works
+		# and this small function will turn this warning off, it should only be visible when lagging
+		lag_warning_event = self.after(5000, lambda: hide_show(self.lag_warning_lbl, show=True))
+		hide_show(self.lag_warning_lbl, show=False)
+		
+		def close_lag_lbl():
+			self.after_cancel(lag_warning_event)
+			hide_show(self.lag_warning_lbl, show=False)
+		
+		do_quick = self.settings.get("do_quick")
+		if do_quick:
+			quick_type, quick_qual = self.settings.get("quick_type"), self.settings.get("quick_quality")
+			self.after(500, lambda: self.url_var.set(""))
+		else:
+			quick_type = quick_qual = None
 		
 		# Getting video object if needed
 		if self.prev_url != url or self.input_video is None:
@@ -797,32 +883,29 @@ class Main(Tk):
 				self.streams_var.set("")
 			
 			video, error = slowtube.get_video(url)  # If YouTube lags the program will lag here
-			if video is None:
-				if isinstance(error, urllib.error.URLError) and do_quick:  # Retry when fast download
-					self.create_retry_panel(url, quick_type, quick_qual)
-					self.url_var.set("")
-				elif error is not None:
-					self.create_error_panel(url, error)
-				elif self.settings.get("print"):
-					print("Incorrect url")
+			
+			# Error handling
+			if self.video_error_handling(video, error, url, do_quick, quick_type, quick_qual):
 				close_lag_lbl()
 				return
-			
 			close_lag_lbl()
+			
 			# I check it the second time in case the user lags, and they had changed video url while getting a response
 			if self.prev_url != url and not do_quick:
 				return
 			self.input_video = video
 			streams = video.streams
-		else:  # I already have a saved input_video object (url is the same
-			streams = self.input_video.streams
+		else:  # I already have a saved input_video object and url is the same
+			video = self.input_video
+			streams = video.streams
 			close_lag_lbl()
 		
 		if not do_quick:
-			if self.extension_var.get() is None:
+			selected_extension = self.extension_var.get()
+			if selected_extension is None:
 				return
 			
-			input_streams = slowtube.filter_streams(streams, self.extension_var.get(), self.settings.get("print"))
+			input_streams = slowtube.filter_streams(streams, selected_extension, self.settings.get("print"))
 			self.understandable_streams = slowtube.streams_to_human(input_streams)
 			self.stream_choice.configure(values=self.understandable_streams)
 			self.streams_var.set(self.understandable_streams[-1])
@@ -918,9 +1001,11 @@ class Main(Tk):
 			if self.settings.get("print"):
 				print("User failed to download a file, likely no connection")
 			retry_later()
-		elif self.settings.get("print"):
-			print("Something unexpected happened")
-			print(error)
+		else:
+			if self.settings.get("print"):
+				print("Something unexpected happened")
+				print(error)
+			retry_later()
 		
 		# Delete created audio and video files
 		if audio_path and os.path.exists(audio_path):

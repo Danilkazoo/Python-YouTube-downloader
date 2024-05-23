@@ -227,7 +227,8 @@ def download_video(stream: pytube.streams.Stream, full_path: str, **settings) ->
 	if settings.get("print"):
 		print(f"\n\nDownloading {streams_to_human([stream])[0]} = {stream}")
 		print("To:", os.path.join(save_path, f"{prefix}{final_name}.{final_extension}"))
-		print(f"Download extension: {settings.get('extension')}\nDownload type: {settings.get('download_type')}")
+		print(f"Download extension: {settings.get('extension')}"
+		      f"Download type: {settings.get('download_type')}")
 		print(f"Settings: {settings}")
 	
 	try:
@@ -250,8 +251,10 @@ def download_video(stream: pytube.streams.Stream, full_path: str, **settings) ->
 		                                        final_extension=final_extension, do_print=settings.get("print"),
 		                                        stream=stream)
 	else:
-		print("Something is wrong, again, shouldn't happen anyways")
-		error = Exception
+		if settings.get("print"):
+			print(f"Already downloaded right video file\npath = {real_path}")
+		error = None
+	
 	return real_path, error
 
 
@@ -339,17 +342,32 @@ def time_to_secs(time: str) -> int:
 	return seconds
 
 
-def is_playlist(url: str):
+def get_url_type(url: str) -> int:
 	"""
 	Checks what type of video is an url.
-	:return: 0 - Not a playlist. 1 - Video from a playlist. 2 - Url to a playlist, NOT a video
+	Does not use internet connection - analyses url string.
+	:param url: Input url
+	:return: 0 - Invalid URL, 1 - A video from YouTube, 2 - A video from a playlist, 3 - Pure playlist
 	"""
-	if "list=" not in url or "you" not in url:
+	
+	parts = url.split('/')
+	
+	# If it's even a url
+	if not parts[0] == "http:" and not parts[0] == "https:":
+		return 0  # Not even an url
+	
+	# If it isn't youtube
+	if len(parts) < 3 or ("youtube" not in parts[2] and "youtu.be" not in parts[2]):
+		# Return 1 as a normal video if something is broken, return 0 if this is not a video
 		return 0
-	elif "watch" in url:
-		return 1
-	else:
-		return 2
+	
+	# If it is a playlist
+	if "list=" in parts[-1]:
+		if "watch" in parts[-1]:
+			return 2  # Video from a playlist
+		return 3  # Playlist url
+	
+	return 1  # It is a normal video
 
 
 def get_playlist(url: str) -> pytube.Playlist:

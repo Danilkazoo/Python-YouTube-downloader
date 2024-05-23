@@ -575,7 +575,8 @@ class Main(Tk):
 		number = self.downloaded_count
 		do_preview = self.settings.get("download_prewievs")
 		video_name = self.video_name
-		this_url = self.video.watch_url
+		this_video = self.video
+		this_url = this_video.watch_url
 		this_quality = slowtube.streams_to_human([downloaded_stream])[0]
 		
 		if visual_variant == 1:
@@ -612,7 +613,7 @@ class Main(Tk):
 			this_url = self.url_var.get()
 		
 		file_size = downloaded_stream.filesize_mb
-		video_len = seconds_to_time(self.video.length)
+		video_len = seconds_to_time(this_video.length)
 		
 		name_lbl = Label(downloaded_frm, text=video_name, font=(self.main_font, 14), foreground=text_color,
 		                 background=back_color, anchor='w')
@@ -731,17 +732,17 @@ class Main(Tk):
 			size = self.preview_size  # Hardcoded cuz panel itself is hardcoded
 			
 			try:
-				response = requests.get(self.video.thumbnail_url)
+				response = requests.get(this_video.thumbnail_url)
 				
 				img = Image.open(BytesIO(response.content)).resize((size, size))
 				img = ImageTk.PhotoImage(img)
 				self.preview_images.append(img)
 				
-				preview = Label(downloaded_frm, image=self.preview_images[-1])
+				preview = Label(downloaded_frm, image=img)
 				preview.grid(row=0, column=0, rowspan=2, padx=(5, 10))
 				preview.bind("<Button-3>", lambda event: utils.popup_menu(right_click_menu, event))
 				preview.bind("<Button-1>", lambda event: url_to_clipboard(this_url, event))
-				del_image = self.preview_images[-1]
+				del_image = img
 			except requests.exceptions.ConnectionError:
 				if self.settings.get("print"):
 					print("Couldn't download preview, most likely no internet connection")
@@ -765,7 +766,7 @@ class Main(Tk):
 		self.canvas_resize_logic()
 		self.downloading_now -= 1
 		
-		download_thread = threading.Thread(target=self.download_next)  # Added recently, should not break but who knows
+		download_thread = threading.Thread(target=self.download_next)
 		download_thread.start()
 	
 	# Error handling for getting video
@@ -1405,6 +1406,7 @@ class Main(Tk):
 		self.full_video_type_name = full_video_type
 		self.video_title = video.title
 		
+		self.retry_requests()  # If we download - we have internet.
 		self.download_selected(download_stream)
 	
 	# Playlist download window
@@ -1425,8 +1427,15 @@ class Main(Tk):
 			download_qual = qual_var.get()
 			playlist_window.destroy()
 			
+			# This event will show the user that YouTube lags at the moment, so they see that everything still works
+			# and this small function will turn this warning off, it should only be visible when lagging
+			lag_warning_event = self.after(5000, lambda: hide_show(self.lag_warning_lbl, show=True))
+			hide_show(self.lag_warning_lbl, show=False)
+			
 			try:
 				playlist = slowtube.get_playlist(url)
+				self.after_cancel(lag_warning_event)
+				hide_show(self.lag_warning_lbl, show=False)
 			except urllib.error.URLError as error:
 				self.create_error_panel(url, error, add_retry=True)
 				utils.hide_show(self.lag_warning_lbl, show=True)
@@ -1510,9 +1519,13 @@ class Main(Tk):
 			all_videos_btn.destroy()
 			select_video_btn.destroy()
 			
+			lag_warning_event = self.after(5000, lambda: hide_show(self.lag_warning_lbl, show=True))
+			hide_show(self.lag_warning_lbl, show=False)
 			try:
 				playlist = slowtube.get_playlist(url)
 				videos = playlist.videos
+				self.after_cancel(lag_warning_event)
+				hide_show(self.lag_warning_lbl, show=False)
 			except urllib.error.URLError as e:
 				self.create_error_panel(url, e, add_retry=True)
 				onclose()

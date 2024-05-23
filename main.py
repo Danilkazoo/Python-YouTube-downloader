@@ -210,11 +210,12 @@ class Main(Tk):
 			this_video_frame = Frame(self.panels_frm, highlightthickness=0, height=self.video_panel_height,
 			                         borderwidth=0)
 			this_video_frame.pack(fill=X)
-			this_video_frame.grid_propagate(False)
+			this_video_frame.pack_propagate(False)
 		
 		queue_frm = Frame(this_video_frame, background=back_color, highlightthickness=0, height=self.video_panel_height,
 		                  borderwidth=0)
 		queue_frm.pack(fill=BOTH)
+		queue_frm.grid_propagate(False)
 		
 		# Info about video in queue
 		video_name_lbl = Label(queue_frm, text=video_name, font=(self.main_font, 16, 'bold'), fg=text_color,
@@ -987,14 +988,14 @@ class Main(Tk):
 			try:
 				audio_path = audio_stream.download(output_path=save_path, filename=audio_filename)
 			except urllib.error.URLError:
-				retry_later()
 				if self.settings.get("print"):
 					print("User failed to download an audio file, likely no connection")
+				retry_later()
 				
 				# Delete created incomplete audio file
 				audio_path = os.path.join(save_path, audio_filename)
-				if os.path.exists(audio_path):
-					os.remove(audio_path)
+				file_delete_thread = threading.Thread(target=utils.try_to_delete, args=(audio_path, 3, 1, 3))
+				file_delete_thread.start()
 				return
 			except utils.StopDownloading:
 				if self.settings.get("print"):
@@ -1003,8 +1004,8 @@ class Main(Tk):
 				
 				# Delete created incomplete audio file
 				audio_path = os.path.join(save_path, audio_filename)
-				if os.path.exists(audio_path):
-					os.remove(audio_path)
+				file_delete_thread1 = threading.Thread(target=utils.try_to_delete, args=(audio_path, 3, 1, 3))
+				file_delete_thread1.start()
 				return
 			
 			if self.settings.get('print'):
@@ -1035,11 +1036,13 @@ class Main(Tk):
 			retry_later()
 		
 		# Delete created audio and video files
-		if audio_path and os.path.exists(audio_path):
-			os.remove(audio_path)
+		if audio_path:
+			file_delete_thread1 = threading.Thread(target=utils.try_to_delete, args=(audio_path, 3, 1, 3))
+			file_delete_thread1.start()
 		
-		if os.path.exists(downloaded_path):
-			os.remove(downloaded_path)
+		if downloaded_path:
+			file_delete_thread2 = threading.Thread(target=utils.try_to_delete, args=(downloaded_path, 3, 1, 3))
+			file_delete_thread2.start()
 	
 	# Settings
 	def create_settings_window(self):

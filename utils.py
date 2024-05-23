@@ -1,4 +1,5 @@
 import os
+import time
 import shutil
 from tkinter import Widget, Toplevel, Entry, Tk, Label, Menu, Event
 
@@ -174,3 +175,16 @@ def popup_menu(right_click_menu: Menu, event: Event = None, manual_x: int = None
 class StopDownloading(Exception):
 	"""Raised only to stop downloading by user"""
 	pass
+
+
+def try_to_delete(file_path: str, max_retries: int, retry_timer: float, delete_delay: float):
+	time.sleep(delete_delay)
+	if not os.path.exists(file_path):
+		return
+	
+	for retry in range(max_retries):
+		try:
+			os.remove(file_path)
+			return
+		except PermissionError:
+			time.sleep(retry_timer)

@@ -1,5 +1,6 @@
 import os
 import subprocess
+import threading
 from math import fabs
 
 import pytube
@@ -62,7 +63,8 @@ def convert_to_extension(file_path: str, update_func, final_extension: str, do_p
 			try:
 				update_func(converted_time)
 			except utils.StopDownloading as error:
-				os.remove(file_path)
+				file_delete_thread = threading.Thread(target=utils.try_to_delete, args=(file_path, 3, 1, 3))
+				file_delete_thread.start()
 				return file_path, error
 	
 	os.remove(file_path)
@@ -420,8 +422,10 @@ def merge_audio_video(video_path: str, audio_path: str, update_func, do_print: b
 			try:
 				update_func(converted_time)
 			except utils.StopDownloading as error:
-				os.remove(video_path)
-				os.remove(audio_path)
+				file_delete_thread1 = threading.Thread(target=utils.try_to_delete, args=(video_path, 3, 1, 3))
+				file_delete_thread1.start()
+				file_delete_thread2 = threading.Thread(target=utils.try_to_delete, args=(audio_path, 3, 1, 3))
+				file_delete_thread2.start()
 				return final_path, error
 	
 	os.remove(video_path)

@@ -206,9 +206,10 @@ class Main(Tk):
 		# This video frame is used for EVERY panel with this video - queue, progress, downloaded
 		this_video_frame = Frame(self.panels_frm, highlightthickness=0, height=self.video_panel_height, borderwidth=0)
 		this_video_frame.pack(fill=X)
+		this_video_frame.grid_propagate(False)
 		queue_frm = Frame(this_video_frame, background=back_color, highlightthickness=0, height=self.video_panel_height,
 		                  borderwidth=0)
-		queue_frm.pack(fill=X)
+		queue_frm.pack(fill=BOTH)
 		
 		# Info about video in queue
 		video_name_lbl = Label(queue_frm, text=video_name, font=(self.main_font, 16, 'bold'), fg=text_color,
@@ -266,14 +267,14 @@ class Main(Tk):
 		
 		error_frm = Frame(self.panels_frm, background=back_color, highlightthickness=0, height=self.video_panel_height,
 		                  borderwidth=0)
-		error_frm.pack(fill=X)
+		error_frm.pack(fill=BOTH)
 		error_frm.grid_propagate(False)
 		error_frm.bind('<Enter>', on_hover)
 		error_frm.bind('<Leave>', out_hover)
 		
 		del_btn = Button(error_frm, text="X", font="Arial 20 bold",
 		                 command=lambda: del_this(error_frm), fg=text_color,
-		                 bg=back_color, relief="flat")
+		                 bg=back_color, relief="flat", height=self.video_panel_height)
 		del_btn.grid(row=0, column=1, rowspan=2)
 		del_btn.bind("<Enter>", lambda _, w=del_btn: btn_glow(widget=w, enter=True, glow_color="#f88"))
 		del_btn.bind("<Leave>", lambda _, w=del_btn: btn_glow(widget=w, enter=False, back_color=back_color))
@@ -283,7 +284,7 @@ class Main(Tk):
 			error = "Couldn't get response from url"
 		elif "age restricted" in error:
 			error = "Video is age restricted, and can't be accessed without logging in... probably"
-		else:
+		elif self.settings.get("print"):
 			print(error)
 		
 		if add_retry:
@@ -303,13 +304,13 @@ class Main(Tk):
 		                  bg=back_color, justify="left")
 		utils.fit_label_text(error_lbl, (self.main_font, "bold"), 16,
 		                     lambda lbl: lbl.winfo_reqwidth() <= error_frm.winfo_width() - del_btn.winfo_reqwidth())
-		error_lbl.grid(column=0, row=0, sticky='nw')
+		error_lbl.grid(column=0, row=0, sticky='nw', columnspan=4)
 		
 		url_lbl = Label(error_frm, text=url, font=(self.main_font, 16, 'bold'), fg=text_color,
 		                bg=back_color, justify="left")
 		utils.fit_label_text(url_lbl, (self.main_font, "bold"), 16,
 		                     lambda lbl: lbl.winfo_reqwidth() <= error_frm.winfo_width() - del_btn.winfo_reqwidth())
-		url_lbl.grid(column=0, row=1, sticky='sw')
+		url_lbl.grid(column=0, row=1, sticky='sw', columnspan=4)
 		
 		right_click_menu = Menu(error_frm, tearoff=0, font=(self.main_font, 12))
 		right_click_menu.add_command(label='Delete', command=lambda: del_this(error_frm))
@@ -342,8 +343,8 @@ class Main(Tk):
 			hide_show(retry_btn, show=False)
 		
 		def del_this(this_info):
-			self.retry_list.remove(this_info)
 			this_info[0].destroy()  # It's retry_frm
+			self.retry_list.remove(this_info)
 			self.canvas_resize_logic()
 			self.update()
 		
@@ -363,7 +364,7 @@ class Main(Tk):
 		
 		retry_frm = Frame(self.panels_frm, background=back_color, highlightthickness=0, height=self.video_panel_height,
 		                  borderwidth=0)
-		retry_frm.pack(fill=X)
+		retry_frm.pack(fill=BOTH)
 		retry_frm.grid_propagate(False)
 		retry_frm.bind('<Enter>', on_hover)
 		retry_frm.bind('<Leave>', out_hover)
@@ -373,13 +374,13 @@ class Main(Tk):
 		del_btn = Button(retry_frm, text="X", font="Arial 20 bold",
 		                 command=lambda: del_this(this_info), fg=text_color,
 		                 bg=back_color, relief="flat")
-		del_btn.grid(row=0, column=1, rowspan=2)
+		del_btn.grid(row=0, column=1, rowspan=3)
 		del_btn.bind("<Enter>", lambda _, w=del_btn: btn_glow(widget=w, enter=True, glow_color="#888"))
 		del_btn.bind("<Leave>", lambda _, w=del_btn: btn_glow(widget=w, enter=False, back_color=back_color))
 		
 		retry_btn = Button(retry_frm, text="Retry", font="Arial 18 bold",
 		                   fg=text_color, bg=back_color, relief="flat", command=new_thread_retry)
-		retry_btn.grid(row=0, column=2, rowspan=2)
+		retry_btn.grid(row=0, column=2, rowspan=3)
 		retry_btn.bind("<Enter>", lambda _, w=retry_btn: btn_glow(widget=w, enter=True, glow_color="#888"))
 		retry_btn.bind("<Leave>", lambda _, w=retry_btn: btn_glow(widget=w, enter=False, back_color=back_color))
 		
@@ -389,13 +390,13 @@ class Main(Tk):
 		                 fg=text_color, bg=back_color, justify="left")
 		utils.fit_label_text(info_lbl, (self.main_font, "bold"), 16,
 		                     lambda lbl: lbl.winfo_reqwidth() <= retry_frm.winfo_width() - btns_width)
-		info_lbl.grid(column=0, row=0, sticky='nw')
+		info_lbl.grid(column=0, row=0, sticky='nw', columnspan=4)
 		
 		url_lbl = Label(retry_frm, text=url, font=(self.main_font, 16, 'bold'), fg=text_color,
 		                bg=back_color, justify="left")
 		utils.fit_label_text(url_lbl, (self.main_font, "bold"), 16,
 		                     lambda lbl: lbl.winfo_reqwidth() <= retry_frm.winfo_width() - btns_width)
-		url_lbl.grid(column=0, row=1, sticky='sw')
+		url_lbl.grid(column=0, row=1, sticky='sw', columnspan=4)
 		
 		right_click_menu = Menu(retry_frm, tearoff=0, font=(self.main_font, 12))
 		right_click_menu.add_command(label='Delete', command=lambda: del_this(this_info))
@@ -504,8 +505,7 @@ class Main(Tk):
 		dummy_label = Label(text=name, font=(self.main_font, 16, 'bold'))
 		utils.fit_label_text(dummy_label, (self.main_font, 'bold'), 16,
 		                     lambda lbl: lbl.winfo_reqwidth() <= progress_frm.winfo_width())
-		dummy_label.update_idletasks()
-		self.progress_canvas.create_text(20 + dummy_label.winfo_reqwidth(), 25,
+		self.progress_canvas.create_text(20, 25, anchor=W,
 		                                 text=name, font=dummy_label["font"], fill=text_color)
 		
 		self.panels_frm.update()
@@ -538,13 +538,15 @@ class Main(Tk):
 		self.progress_canvas.itemconfigure(2, text=f"{percent:.2f}%")
 		self.progress_canvas.update()
 	
-	def progress_panel_donwloading(self, stream: pytube.streams.Stream, bytes: bytes, remaining: int):
-		will_convert = self.settings.get("extension") != stream.subtype
-		
+	def progress_panel_downloading(self, stream: pytube.streams.Stream, bytes: bytes, remaining: int):
 		percent = 100 - (remaining / stream.filesize) * 100
-		if will_convert:
-			percent /= 2
-		if self.divide_progress:
+		
+		will_convert = self.settings.get("extension") != stream.subtype
+		if self.downloading_audio_file:  # Doesn't change AFTER downloading audio file
+			percent /= 4
+			if self.downloading_video_file:  # So video after audio will be from
+				percent += 25
+		elif will_convert:
 			percent /= 2
 		self.progress_panel_update(percent)
 	
@@ -949,7 +951,9 @@ class Main(Tk):
 		video_name = self.video_name
 		
 		self.create_progress_panel()
-		self.video.register_on_progress_callback(self.progress_panel_donwloading)
+		self.video.register_on_progress_callback(self.progress_panel_downloading)
+		self.downloading_audio_file = False
+		self.downloading_video_file = False
 		
 		audio_path = None
 		
@@ -961,7 +965,7 @@ class Main(Tk):
 		# If we need audio and we have only video - download purely audio and merge with video
 		if self.settings.get("download_type") == "both":
 			audio_stream = self.video.streams.filter(only_audio=True).order_by('abr').last()
-			self.divide_progress = True
+			self.downloading_audio_file = True
 			
 			audio_filename = f"{pv_sanitize(video_name, replacement_text=' ')} only_audio_sussy_baka.webm"
 			prefix = utils.calculate_prefix(save_path, audio_filename)  # Shouldn't be needed actually
@@ -994,7 +998,7 @@ class Main(Tk):
 				print("Selected audio:", audio_stream)
 				print("Temp audio path:", audio_path)
 		
-		self.divide_progress = False
+		self.downloading_video_file = True
 		downloaded_path, error = slowtube.download_video(stream, save_path, **self.settings, name=video_name,
 		                                                 update_func=self.progress_panel_convert, audio_path=audio_path)
 		

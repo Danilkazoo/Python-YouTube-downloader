@@ -191,7 +191,7 @@ class Main(Tk):
 			video_frm.destroy()
 			self.canvas_resize_logic()
 			
-			if self.settings.get("print"):
+			if self.print_debug:
 				print(f"Queue videos after removing: {len(self.download_queue)}")
 		
 		# Panels should have alternating colors
@@ -290,7 +290,7 @@ class Main(Tk):
 			error = "Couldn't get response from url"
 		elif "age restricted" in error:
 			error = "Video is age restricted, and can't be accessed without logging in... probably"
-		elif self.settings.get("print"):
+		elif self.print_debug:
 			print(error)
 		
 		if add_retry:
@@ -330,7 +330,7 @@ class Main(Tk):
 		self.canvas_resize_logic()
 		self.update()
 	
-	def create_retry_panel(self, url, download_type, download_quality, playlist_path=None):
+	def create_retry_panel(self, url: str, download_type: str, download_quality: str, playlist_path=None):
 		"""
 		A panel for panels for retrying getting a stream to download.
 		This panel is used only when you are requesting a YouTube video and
@@ -430,7 +430,7 @@ class Main(Tk):
 			return
 		
 		self.currently_retrying = True
-		if self.settings.get("print"):
+		if self.print_debug:
 			print(f"\nTrying to retry requests. Current retries left: {len(self.retry_list)}\n")
 		
 		while self.retry_list:
@@ -460,11 +460,11 @@ class Main(Tk):
 					return
 			
 			streams = video.streams
-			input_streams = slowtube.filter_streams(streams, video_type, self.settings.get("print"))
+			input_streams = slowtube.filter_streams(streams, video_type, self.print_debug)
 			selected_stream = slowtube.quick_select(input_streams, video_quality, video_type,
-			                                        do_print=self.settings.get("print"))
+			                                        do_print=self.print_debug)
 			
-			if self.settings.get("print"):
+			if self.print_debug:
 				print("\nSelected stream:", selected_stream)
 			
 			self.retry_list.pop(0)
@@ -478,7 +478,7 @@ class Main(Tk):
 		self.currently_retrying = False
 	
 	# Panels with progress bar
-	def create_progress_panel(self, this_video_panel):
+	def create_progress_panel(self, this_video_panel: Frame):
 		variant = self.settings.get('visual_theme')
 		number = self.downloaded_count + 1
 		
@@ -562,14 +562,14 @@ class Main(Tk):
 			percent /= 2
 		self.progress_panel_update(percent)
 	
-	def progress_panel_convert(self, converted_time):
+	def progress_panel_convert(self, converted_time: float):
 		self.progress_panel_update(50 + (converted_time / self.video.length * 50))
 	
 	def delete_progress_panel(self):
 		self.progress_frm.destroy()
 	
 	# Panels for downloaded video, with interactions
-	def create_downloaded_panel(self, download_location, downloaded_stream, this_video_panel):
+	def create_downloaded_panel(self, download_location: str, downloaded_stream, this_video_panel: Frame):
 		self.delete_progress_panel()
 		visual_variant = self.settings.get('visual_theme')
 		self.downloaded_count += 1
@@ -631,7 +631,7 @@ class Main(Tk):
 		
 		# Interactions behaviour
 		def del_command(path, del_image, dis_frame, this_video_frm):
-			if not os.path.exists(path) and self.settings.get("print"):
+			if not os.path.exists(path) and self.print_debug:
 				print("Good attempt to delete nonexistent file")
 			else:
 				os.remove(path)
@@ -745,7 +745,7 @@ class Main(Tk):
 				preview.bind("<Button-1>", lambda event: url_to_clipboard(this_url, event))
 				del_image = img
 			except requests.exceptions.ConnectionError:
-				if self.settings.get("print"):
+				if self.print_debug:
 					print("Couldn't download preview, most likely no internet connection")
 		
 		file_open_btn = Button(downloaded_frm, text="📁", font="Arial 16",
@@ -786,7 +786,7 @@ class Main(Tk):
 		if video:
 			return False
 		
-		if error is None and self.settings.get("print"):
+		if error is None and self.print_debug:
 			print("Incorrect url")
 		
 		# No internet
@@ -801,7 +801,7 @@ class Main(Tk):
 			#  I can fix this locally by changing pytube cipher.py, but that CAN be bad
 			#  So I will not change it - an error is random as it seems, it could or could not happen with same input
 			#  So, I will just try to retry connection a few times, if it keeps happening - so be bruh
-			if self.settings.get("print"):
+			if self.print_debug:
 				print("\nThis is an error that... started randomly occuring in pytube...\n"
 				      "Retry connection 3 times")
 			for retries in range(1, 4):
@@ -813,11 +813,11 @@ class Main(Tk):
 				print(f"Success ?\n{video=}\n{error=}")
 				if do_quick:  # If do_quick then just add a video to queue
 					streams = video.streams
-					input_streams = slowtube.filter_streams(streams, quick_type, self.settings.get("print"))
+					input_streams = slowtube.filter_streams(streams, quick_type, self.print_debug)
 					selected_stream = slowtube.quick_select(input_streams, quick_qual, quick_type,
-					                                        self.settings.get("print"))
+					                                        self.print_debug)
 					
-					if self.settings.get("print"):
+					if self.print_debug:
 						print("\nSelected stream:", selected_stream)
 					
 					self.add_to_download_queue(download_stream=selected_stream, input_video=video,
@@ -828,7 +828,7 @@ class Main(Tk):
 					self.input_video = video
 					self.check_url(url)
 					return True
-			if self.settings.get("print"):
+			if self.print_debug:
 				print("No success")
 			
 			if do_quick:  # Retry with current settings when fast download
@@ -838,7 +838,7 @@ class Main(Tk):
 		
 		else:
 			self.create_error_panel(url, error)
-			if self.settings.get("print"):
+			if self.print_debug:
 				raise error
 		
 		return True
@@ -858,14 +858,14 @@ class Main(Tk):
 		url_type = slowtube.get_url_type(url)
 		
 		if url_type == 0:
-			if self.settings.get("print"):
+			if self.print_debug:
 				print("\nInvalid url")
 			self.en_url.configure(bg=self.disabled_color)
 			return
 		self.en_url.configure(bg=self.df_widgets_bg_col)
 		
 		if url_type == 2:
-			if self.settings.get('print'):
+			if self.print_debug:
 				print("\nThis is a video from a Playlist")
 			
 			# If this setting is on than I open playlist only with pure playlist url (2nd IF)
@@ -874,7 +874,7 @@ class Main(Tk):
 				playlist_window_thread.start()
 				return
 		elif url_type == 3:
-			if self.settings.get('print'):
+			if self.print_debug:
 				print("\nThis is a Playlist")
 			
 			playlist_window_thread = threading.Thread(target=self.create_playlist_window, args=(url, url_type))
@@ -900,7 +900,7 @@ class Main(Tk):
 		# Getting video object if needed
 		if self.prev_url != url or self.input_video is None:
 			self.prev_url = url
-			if self.settings.get("print"):
+			if self.print_debug:
 				print(f"\nGetting a video from a given url: {url}")
 			
 			if not do_quick:
@@ -930,16 +930,16 @@ class Main(Tk):
 			if selected_extension is None:
 				return
 			
-			input_streams = slowtube.filter_streams(streams, selected_extension, self.settings.get("print"))
+			input_streams = slowtube.filter_streams(streams, selected_extension, self.print_debug)
 			self.understandable_streams = slowtube.streams_to_human(input_streams)
 			self.stream_choice.configure(values=self.understandable_streams)
 			self.streams_var.set(self.understandable_streams[-1])
 			self.input_streams = input_streams  # used only when downloading video manually
 		else:
-			input_streams = slowtube.filter_streams(streams, quick_type, self.settings.get("print"))
-			selected_stream = slowtube.quick_select(input_streams, quick_qual, quick_type, self.settings.get("print"))
+			input_streams = slowtube.filter_streams(streams, quick_type, self.print_debug)
+			selected_stream = slowtube.quick_select(input_streams, quick_qual, quick_type, self.print_debug)
 			
-			if self.settings.get("print"):
+			if self.print_debug:
 				print("\nSelected stream:", selected_stream)
 			
 			self.add_to_download_queue(download_stream=selected_stream, input_video=video,
@@ -988,7 +988,7 @@ class Main(Tk):
 			try:
 				audio_path = audio_stream.download(output_path=save_path, filename=audio_filename)
 			except urllib.error.URLError:
-				if self.settings.get("print"):
+				if self.print_debug:
 					print("User failed to download an audio file, likely no connection")
 				retry_later()
 				
@@ -998,7 +998,7 @@ class Main(Tk):
 				file_delete_thread.start()
 				return
 			except utils.StopDownloading:
-				if self.settings.get("print"):
+				if self.print_debug:
 					print("User decided to stop downloading on a audio_file")
 				stop_downloading()
 				
@@ -1008,7 +1008,7 @@ class Main(Tk):
 				file_delete_thread1.start()
 				return
 			
-			if self.settings.get('print'):
+			if self.print_debug:
 				print("\nWe need to merge")
 				print("Selected audio:", audio_stream)
 				print("Temp audio path:", audio_path)
@@ -1022,15 +1022,15 @@ class Main(Tk):
 			return
 		
 		if isinstance(error, utils.StopDownloading):
-			if self.settings.get("print"):
+			if self.print_debug:
 				print("User decided to stop downloading on a final file")
 			stop_downloading()
 		elif isinstance(error, urllib.error.URLError):  # User had no internet when downloading
-			if self.settings.get("print"):
+			if self.print_debug:
 				print("User failed to download a file, likely no connection")
 			retry_later()
 		else:
-			if self.settings.get("print"):
+			if self.print_debug:
 				print("Something unexpected happened")
 				print(error)
 			retry_later()
@@ -1050,6 +1050,7 @@ class Main(Tk):
 			input_save_location_check()
 			
 			self.settings['print'] = debug_var.get()
+			self.print_debug = debug_var.get()
 			self.settings['visual_theme'] = theme_var.get()
 			self.settings['do_quick'] = fast_var.get()
 			self.settings['quick_type'] = fast_ext_var.get()
@@ -1091,7 +1092,7 @@ class Main(Tk):
 					widget.configure(state='readonly', background=back_color, foreground=text_color)
 				self.download_button.configure(state='normal', background=back_color, foreground=text_color)
 			
-			if self.settings['print']:
+			if self.print_debug:
 				print(self.settings)
 		
 		def btn_path_insert():
@@ -1119,6 +1120,7 @@ class Main(Tk):
 			
 			save_path_var.set(self.settings['save_path'])
 			debug_var.set(self.settings['print'])
+			self.print_debug = self.settings['print']
 			theme_var.set(self.settings['visual_theme'])
 			fast_var.set(self.settings['do_quick'])
 			fast_ext_var.set(self.settings["quick_type"])
@@ -1176,7 +1178,7 @@ class Main(Tk):
 			else:
 				checkbtn.configure(fg=self.disabled_color)
 			
-			if self.settings.get("print"):
+			if self.print_debug:
 				print(self.settings)
 		
 		back_color = self.df_widgets_bg_col
@@ -1253,7 +1255,7 @@ class Main(Tk):
 		debug_var = BooleanVar()
 		debug_choice = Checkbutton(settings_window, text="hey wanna sum spam ?", variable=debug_var, fg=text_color,
 		                           bg=self.df_frame_background_color, font=self.small_font)
-		debug_var.set(self.settings['print'])
+		debug_var.set(self.print_debug)
 		debug_var.trace('w', lambda *event: update_checkbox("print", debug_var, debug_choice))
 		if self.settings.get("add_debug"):  # I can turn debug on and off, but only with my settings
 			debug_choice.grid(row=10, column=4, padx=10, pady=10, sticky='w')
@@ -1330,6 +1332,7 @@ class Main(Tk):
 			settings[Int] = int(settings[Int])
 		
 		self.settings = settings
+		self.print_debug = self.settings.get("print")
 		self.geometry(self.settings['start_geometry'])
 		
 		# Save settings when closing the program
@@ -1340,12 +1343,12 @@ class Main(Tk):
 			             downloaded_videos_stats=self.settings['downloaded_videos_stats'] + self.downloaded_count,
 			             save_path=self.settings['save_path'], max_window_height=self.settings["max_window_height"])
 			
-			if self.settings['print']:
+			if self.print_debug:
 				print(self.settings)
 			self.destroy()
 		
 		self.protocol("WM_DELETE_WINDOW", ondestroy)
-		if self.settings['print']:
+		if self.print_debug:
 			print(self.settings)
 	
 	# Add video stream to download to queue
@@ -1370,10 +1373,10 @@ class Main(Tk):
 		if input_video is None:
 			input_video = self.input_video
 		
-		video_name = slowtube.get_real_name(input_video, do_print=self.settings['print'])
+		video_name = slowtube.get_real_name(input_video, do_print=self.print_debug)
 		if video_name is None:
 			video_name = input_video.title
-		elif input_video.title != video_name and self.settings.get("print"):
+		elif input_video.title != video_name and self.print_debug:
 			print("\n\nThat case when title and real name are NOT the same")
 			print(f'Title: {input_video.title}')
 			print(f'Real Title: {video_name}')
@@ -1450,11 +1453,11 @@ class Main(Tk):
 			else:
 				new_playlist_path = None
 			
-			if self.settings.get("print"):
+			if self.print_debug:
 				print(f"Downloading all videos from playlist {playlist}\nTo: {new_playlist_path}")
 			
 			for video_url in playlist.url_generator():
-				if self.settings.get("print"):
+				if self.print_debug:
 					print("Creating a retry panel:", video_url)
 				self.create_retry_panel(video_url, download_type, download_qual, new_playlist_path)
 			self.retry_requests()
@@ -1465,7 +1468,7 @@ class Main(Tk):
 			
 			playlist_window.destroy()
 			
-			if self.settings.get("print"):
+			if self.print_debug:
 				print(f"Downloading all videos from playlist: {url}")
 			
 			self.create_retry_panel(url, download_type, download_qual)
@@ -1488,14 +1491,14 @@ class Main(Tk):
 				else:
 					new_playlist_path = None
 				
-				if self.settings.get("print"):
+				if self.print_debug:
 					print("Downloading selected videos from playlist", playlist)
 				
 				for video, do_download in video_choices:
 					if not do_download.get():
 						continue
 					
-					if self.settings.get("print"):
+					if self.print_debug:
 						print("Downloading selected video", video)
 					self.create_retry_panel(url, download_type, download_qual, new_playlist_path)
 				
@@ -1556,7 +1559,7 @@ class Main(Tk):
 				iterate_playlist_thread.start()  # I do this because this thread stops if you retry, so we need NEW thread
 			
 			def playlist_stop():
-				if self.settings.get("print"):
+				if self.print_debug:
 					print(f"Stopped getting playlist {playlist}")
 				utils.hide_show(download_btn, show=False)
 				utils.hide_show(check_all_btn, show=False)
@@ -1644,7 +1647,7 @@ class Main(Tk):
 					try:
 						print("Trying", video)
 						video_len = seconds_to_time(video.length)
-						video_name = slowtube.get_real_name(video, self.settings['print'])
+						video_name = slowtube.get_real_name(video, self.print_debug)
 					except urllib.error.URLError:
 						print("Error", video)
 						playlist_stop()
@@ -1831,7 +1834,7 @@ class Main(Tk):
 		# height 145 is impossible for manual resizing, here I check if it was a user who resized the window
 		if event.height != self.winfo_reqheight() and type(event.widget) is Main and event.height >= 145:
 			self.settings["max_window_height"] = self.winfo_height()
-			if self.settings.get("print"):
+			if self.print_debug:
 				print("New height:", self.settings.get("max_window_height"))
 			self.canvas_resize_logic()
 		self.df_canvas.configure(scrollregion=self.df_canvas.bbox("all"))

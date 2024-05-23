@@ -44,7 +44,7 @@ class Main(Tk):
 		
 		self.download_frame = self.download_frame_gen()
 		self.download_frame.pack(expand=True, fill=BOTH)
-		self.panels_arr = []
+		self.download_panels_arr = []
 		
 		self.update()
 		self.minsize(self.winfo_width(), self.winfo_height())
@@ -169,7 +169,7 @@ class Main(Tk):
 		return df
 	
 	# Gray panels for videos in queue
-	def create_queue_panel(self, video_name, this_video, this_stream, playlist_name, ext_type):
+	def create_queue_panel(self, video_name, this_video, this_stream, playlist_name, ext_type, this_video_panel):
 		"""
 		All this input information is used mostly to find video in a queue to delete it.
 		"""
@@ -204,9 +204,14 @@ class Main(Tk):
 		self.panels_frm.update_idletasks()
 		
 		# This video frame is used for EVERY panel with this video - queue, progress, downloaded
-		this_video_frame = Frame(self.panels_frm, highlightthickness=0, height=self.video_panel_height, borderwidth=0)
-		this_video_frame.pack(fill=X)
-		this_video_frame.grid_propagate(False)
+		if this_video_panel:
+			this_video_frame = this_video_panel
+		else:
+			this_video_frame = Frame(self.panels_frm, highlightthickness=0, height=self.video_panel_height,
+			                         borderwidth=0)
+			this_video_frame.pack(fill=X)
+			this_video_frame.grid_propagate(False)
+		
 		queue_frm = Frame(this_video_frame, background=back_color, highlightthickness=0, height=self.video_panel_height,
 		                  borderwidth=0)
 		queue_frm.pack(fill=BOTH)
@@ -343,7 +348,7 @@ class Main(Tk):
 			hide_show(retry_btn, show=False)
 		
 		def del_this(this_info):
-			this_info[0].destroy()  # It's retry_frm
+			this_info[0].destroy()  # It's this_video_panel
 			self.retry_list.remove(this_info)
 			self.canvas_resize_logic()
 			self.update()
@@ -362,14 +367,19 @@ class Main(Tk):
 			back_color = "#aaa"
 		text_color = "black"
 		
-		retry_frm = Frame(self.panels_frm, background=back_color, highlightthickness=0, height=self.video_panel_height,
+		# This frame will be used in everything - queue, progress, downloaded etc
+		this_video_panel = Frame(self.panels_frm, highlightthickness=0, height=self.video_panel_height, borderwidth=0)
+		this_video_panel.pack(fill=X)
+		this_video_panel.grid_propagate(False)
+		
+		retry_frm = Frame(this_video_panel, background=back_color, highlightthickness=0, height=self.video_panel_height,
 		                  borderwidth=0)
 		retry_frm.pack(fill=BOTH)
 		retry_frm.grid_propagate(False)
 		retry_frm.bind('<Enter>', on_hover)
 		retry_frm.bind('<Leave>', out_hover)
 		
-		this_info = (retry_frm, url, download_type, download_quality, playlist_path)
+		this_info = (this_video_panel, retry_frm, url, download_type, download_quality, playlist_path)
 		
 		del_btn = Button(retry_frm, text="X", font="Arial 20 bold",
 		                 command=lambda: del_this(this_info), fg=text_color,
@@ -423,7 +433,7 @@ class Main(Tk):
 			print(f"\nTrying to retry requests. Current retries left: {len(self.retry_list)}\n")
 		
 		while self.retry_list:
-			retry_frm, video_url, video_type, video_quality, playlist_path = self.retry_list[0]
+			this_video_panel, retry_frm, video_url, video_type, video_quality, playlist_path = self.retry_list[0]
 			
 			panel_original_bg = retry_frm["background"]
 			all_panel_parts = (retry_frm, *retry_frm.winfo_children())
@@ -456,17 +466,18 @@ class Main(Tk):
 			if self.settings.get("print"):
 				print("\nSelected stream:", selected_stream)
 			
-			self.add_to_download_queue(download_stream=selected_stream, this_playlist_path=playlist_path,
-			                           download_type_name=video_type, input_video=video)
 			self.retry_list.pop(0)
 			retry_frm.destroy()  # Deleting added to queue video and it's panel
 			self.canvas_resize_logic()
 			self.update()
+			self.add_to_download_queue(download_stream=selected_stream, this_playlist_path=playlist_path,
+			                           download_type_name=video_type, input_video=video,
+			                           this_video_panel=this_video_panel)
 		
 		self.currently_retrying = False
 	
 	# Panels with progress bar
-	def create_progress_panel(self):
+	def create_progress_panel(self, this_video_panel):
 		variant = self.settings.get('visual_theme')
 		number = self.downloaded_count + 1
 		
@@ -488,13 +499,13 @@ class Main(Tk):
 				highlight_color = self.purple_odd_highlight
 			text_color = self.purple_text
 		
-		progress_frm = Frame(self.this_video_frame, background=back_color, highlightbackground=highlight_color,
+		progress_frm = Frame(this_video_panel, background=back_color, highlightbackground=highlight_color,
 		                     highlightthickness=0, height=self.video_panel_height, borderwidth=0)
-		progress_frm.pack(fill=X)
+		progress_frm.pack(fill=BOTH)
 		self.progress_frm = progress_frm
 		self.progress_canvas = Canvas(progress_frm, background=back_color, highlightcolor=highlight_color,
 		                              highlightthickness=0, height=self.video_panel_height, borderwidth=0)
-		self.progress_canvas.pack(fill=X)
+		self.progress_canvas.pack(fill=BOTH)
 		
 		# I just resize a green rectangle according to progress
 		self.progress_canvas.create_rectangle(0, 0, 0, self.video_panel_height, fill='green')
@@ -557,7 +568,7 @@ class Main(Tk):
 		self.progress_frm.destroy()
 	
 	# Panels for downloaded video, with interactions
-	def create_downloaded_panel(self, download_location, downloaded_stream):
+	def create_downloaded_panel(self, download_location, downloaded_stream, this_video_panel):
 		self.delete_progress_panel()
 		visual_variant = self.settings.get('visual_theme')
 		self.downloaded_count += 1
@@ -593,7 +604,7 @@ class Main(Tk):
 				highlight_border = self.purple_odd_highlight_border
 			text_color = self.purple_text
 		
-		downloaded_frm = Frame(self.this_video_frame, background=back_color, highlightbackground=border_color,
+		downloaded_frm = Frame(this_video_panel, background=back_color, highlightbackground=border_color,
 		                       highlightthickness=5, height=self.video_panel_height)
 		downloaded_frm.pack(fill=X)
 		
@@ -622,10 +633,11 @@ class Main(Tk):
 				print("Good attempt to delete nonexistent file")
 			else:
 				os.remove(path)
-				if del_image:
-					self.preview_images.remove(del_image)
+			
+			if del_image:
+				self.preview_images.remove(del_image)
 			this_video_frm.destroy()
-			self.panels_arr.remove(dis_frame)
+			self.download_panels_arr.remove(dis_frame)
 			self.canvas_resize_logic()
 		
 		def thing(main_field: Tk, event=None, temp_frame=None, a=1.0):
@@ -668,12 +680,12 @@ class Main(Tk):
 				new_path = rename(title_location, name_location)
 				delete_location = new_path
 		
-		this_form = self.this_video_frame
 		delete_location = download_location
 		right_click_menu = Menu(downloaded_frm, tearoff=0, font=(self.main_font, 12))
 		right_click_menu.add_command(label='Delete',
 		                             command=lambda: del_command(delete_location, del_image=del_image,
-		                                                         dis_frame=downloaded_frm, this_video_frm=this_form))
+		                                                         dis_frame=downloaded_frm,
+		                                                         this_video_frm=this_video_panel))
 		right_click_menu.add_command(label='Copy a link', command=lambda: url_to_clipboard(this_url))
 		
 		# Basically, video can have 2 names, and user can swap them
@@ -743,7 +755,7 @@ class Main(Tk):
 		                       command=lambda: utils.popup_menu(right_click_menu, manual_x=menu_open_btn.winfo_rootx(),
 		                                                        manual_y=menu_open_btn.winfo_rooty()))
 		menu_open_btn.grid(column=5, row=0, rowspan=3)
-		self.panels_arr.append(downloaded_frm)
+		self.download_panels_arr.append(downloaded_frm)
 		
 		downloaded_frm.bind('<Enter>', lambda x: on_hover(highlight_color, highlight_border))
 		downloaded_frm.bind('<Leave>', lambda x: out_hover(back_color, border_color))
@@ -934,23 +946,24 @@ class Main(Tk):
 	def download_selected(self, stream):
 		def retry_later():  # User had no internet when downloading
 			self.delete_progress_panel()
-			self.this_video_frame.destroy()
+			this_video_panel.destroy()
 			self.add_to_download_queue(download_stream=stream, download_type_name=self.full_video_type_name,
 			                           input_video=self.video, this_playlist_path=self.this_playlist_save_path,
-			                           auto_download_next=False)
+			                           auto_download_next=False, this_video_panel=this_video_panel)
 			self.downloading_now -= 1
 			hide_show(self.download_retry_btn, show=True)
 			self.update()
 		
 		def stop_downloading():  # Called when user decides to stop the download / converting
 			self.delete_progress_panel()
-			self.this_video_frame.destroy()
+			this_video_panel.destroy()
 			self.downloading_now -= 1
 			self.update()
 		
 		video_name = self.video_name
+		this_video_panel = self.this_video_frame
 		
-		self.create_progress_panel()
+		self.create_progress_panel(this_video_panel)
 		self.video.register_on_progress_callback(self.progress_panel_downloading)
 		self.downloading_audio_file = False
 		self.downloading_video_file = False
@@ -1003,7 +1016,7 @@ class Main(Tk):
 		                                                 update_func=self.progress_panel_convert, audio_path=audio_path)
 		
 		if error is None:
-			self.create_downloaded_panel(downloaded_path, downloaded_stream=stream)
+			self.create_downloaded_panel(downloaded_path, downloaded_stream=stream, this_video_panel=this_video_panel)
 			return
 		
 		if isinstance(error, utils.StopDownloading):
@@ -1333,7 +1346,7 @@ class Main(Tk):
 	
 	# Add video stream to download to queue
 	def add_to_download_queue(self, download_stream=None, download_type_name=None, input_video=None,
-	                          this_playlist_path=None, auto_download_next=True):
+	                          this_playlist_path=None, auto_download_next=True, this_video_panel=None):
 		"""
 		This is a function that handles all new videos to be downloaded.
 		
@@ -1343,6 +1356,7 @@ class Main(Tk):
 		Otherwise, it will be taken from self.input_video
 		:param this_playlist_path: Inputted when playlist creates a new save location - new file for this exact playlist.
 		:param auto_download_next: Should function download_next be called.
+		:param this_video_panel: Every video has it's own panel, usually they are created in queue, if not - send them here.
 		"""
 		if download_stream is None:
 			if not self.input_streams:
@@ -1361,7 +1375,7 @@ class Main(Tk):
 			print(f'Real Title: {video_name}')
 		
 		panel, this_video_frame = self.create_queue_panel(video_name, input_video, download_stream, this_playlist_path,
-		                                                  download_type_name)
+		                                                  download_type_name, this_video_panel)
 		self.queue_panels.append(panel)
 		self.download_queue.append((input_video, download_stream, video_name,
 		                            this_video_frame, this_playlist_path, download_type_name))

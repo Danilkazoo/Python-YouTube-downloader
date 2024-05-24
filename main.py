@@ -331,7 +331,8 @@ class Main(Tk):
 		self.canvas_resize_logic()
 		self.update()
 	
-	def create_retry_panel(self, url: str, download_type: str, download_quality: str, playlist_path=None):
+	def create_retry_panel(self, url: str, download_type: str, download_quality: str, playlist_path=None,
+	                       video_object=None):
 		"""
 		A panel for panels for retrying getting a stream to download.
 		This panel is used only when you are requesting a YouTube video and
@@ -339,6 +340,12 @@ class Main(Tk):
 		Essentially, this is a panel for a moment before this requested video is sent to normal queue panel
 		which requires to have this video from a response. When retrying using retry button -
 		all these should try to get a request again.
+		:param url: Url to a video this request should receive.
+		:param download_type: Download type - webm audio for example.
+		:param download_quality: Download quality - best/worst, user choices
+		:param playlist_path: If you send this from a playlist
+		:param video_object: If you already have a video object - send them here, to not send requests for them.
+		These videos are expected to not have a stream or anything else besides video object.
 		"""
 		
 		def on_hover(*event):
@@ -381,7 +388,7 @@ class Main(Tk):
 		retry_frm.bind('<Enter>', on_hover)
 		retry_frm.bind('<Leave>', out_hover)
 		
-		this_info = (this_video_panel, retry_frm, url, download_type, download_quality, playlist_path)
+		this_info = (this_video_panel, retry_frm, url, download_type, download_quality, playlist_path, video_object)
 		
 		del_btn = Button(retry_frm, text="X", font="Arial 20 bold",
 		                 command=lambda: del_this(this_info), fg=text_color,
@@ -435,20 +442,21 @@ class Main(Tk):
 			print(f"\nTrying to retry requests. Current retries left: {len(self.retry_list)}\n")
 		
 		while self.retry_list:
-			this_video_panel, retry_frm, video_url, video_type, video_quality, playlist_path = self.retry_list[0]
+			this_video_panel, retry_frm, video_url, video_type, video_quality, playlist_path, this_video = \
+				self.retry_list[0]
 			
 			panel_original_bg = retry_frm["background"]
 			all_panel_parts = (retry_frm, *retry_frm.winfo_children())
 			for panel_part in all_panel_parts:
 				panel_part.configure(background="#888")  # Just so the user sees that retry button works
 			
-			video, error = slowtube.get_video(video_url)
+			video, error = slowtube.get_video(video_url, this_video)
 			# Cancel retries if there's still no internet connection
 			if video is None:
 				stop_retrying = True
 				if isinstance(error, AttributeError):  # Retry a few times if an error is random
 					for retries in range(3):
-						video, error = slowtube.get_video(video_url)
+						video, error = slowtube.get_video(video_url, this_video)
 						if video:
 							stop_retrying = False
 							break
@@ -1512,7 +1520,7 @@ class Main(Tk):
 					
 					if self.print_debug:
 						print("Downloading selected video", video)
-					self.create_retry_panel(url, download_type, download_qual, new_playlist_path)
+					self.create_retry_panel(url, download_type, download_qual, new_playlist_path, video)
 				
 				playlist_window.destroy()
 				im_references.clear()

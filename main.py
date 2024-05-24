@@ -128,16 +128,17 @@ class Main(Tk):
 		self.download_button.grid(row=1, column=5, padx=(20, 10))
 		
 		if self.settings['do_quick']:
-			for widget in (self.extension_combo, self.stream_choice, self.download_button):
+			for widget in (self.extension_combo, self.stream_choice):
 				widget.configure(state='disabled', background=self.df_frame_background_color,
 				                 foreground=self.disabled_color)
 		else:
 			for widget in (self.extension_combo, self.stream_choice):
 				widget.configure(state='readonly', background=self.df_widgets_bg_col, foreground=self.df_text_color)
 			
-			self.download_button.configure(state="normal", background=self.df_widgets_bg_col,
-			                               foreground=self.df_text_color)
 			self.extension_var.set(self.settings.get("quick_type"))
+		
+		self.download_button.configure(state='disabled', background=self.df_frame_background_color,
+		                               foreground=self.disabled_color)
 		
 		# Just adds glow when hovering
 		for widget in (url_ins_btn, self.en_url, self.download_button, self.download_retry_btn):
@@ -906,6 +907,8 @@ class Main(Tk):
 			if not do_quick:
 				self.stream_choice.configure(values=())  # So you can't choose previous video when inputting this one
 				self.streams_var.set("")
+				self.download_button.configure(state="disabled", background=self.df_frame_background_color,
+				                               foreground=self.disabled_color)
 			
 			video, error = slowtube.get_video(url)  # If YouTube lags the program will lag here
 			
@@ -928,6 +931,8 @@ class Main(Tk):
 		if not do_quick:
 			selected_extension = self.extension_var.get()
 			if selected_extension is None:
+				self.download_button.configure(state="disabled", background=self.df_frame_background_color,
+				                               foreground=self.disabled_color)
 				return
 			
 			input_streams = slowtube.filter_streams(streams, selected_extension, self.print_debug)
@@ -935,6 +940,9 @@ class Main(Tk):
 			self.stream_choice.configure(values=self.understandable_streams)
 			self.streams_var.set(self.understandable_streams[-1])
 			self.input_streams = input_streams  # used only when downloading video manually
+			
+			self.download_button.configure(state="normal", background=self.df_widgets_bg_col,
+			                               foreground=self.df_text_color)
 		else:
 			input_streams = slowtube.filter_streams(streams, quick_type, self.print_debug)
 			selected_stream = slowtube.quick_select(input_streams, quick_qual, quick_type, self.print_debug)
@@ -1090,7 +1098,6 @@ class Main(Tk):
 			else:
 				for widget in (self.extension_combo, self.stream_choice):
 					widget.configure(state='readonly', background=back_color, foreground=text_color)
-				self.download_button.configure(state='normal', background=back_color, foreground=text_color)
 			
 			if self.print_debug:
 				print(self.settings)
@@ -1446,6 +1453,11 @@ class Main(Tk):
 				self.create_error_panel(url, error, add_retry=True)
 				utils.hide_show(self.lag_warning_lbl, show=True)
 				return
+			except KeyError as error:
+				self.create_error_panel(url, "Youtube personal mixes aren't public playlists, you cannot download them")
+				self.after_cancel(lag_warning_event)
+				hide_show(self.lag_warning_lbl, show=False)
+				return
 			
 			if self.settings.get("create_new_files"):
 				this_playlist_name = slowtube.sanitize_playlist_name(playlist.title)
@@ -1536,6 +1548,11 @@ class Main(Tk):
 				self.create_error_panel(url, e, add_retry=True)
 				onclose()
 				utils.hide_show(self.lag_warning_lbl, show=True)
+				return
+			except KeyError as error:
+				self.create_error_panel(url, "Youtube personal mixes aren't public playlists, you cannot download them")
+				self.after_cancel(lag_warning_event)
+				hide_show(self.lag_warning_lbl, show=False)
 				return
 			
 			variant = self.settings.get('visual_theme')

@@ -169,12 +169,14 @@ def filter_extension_type(filter_extension_name: str):
 	return extension, audio_type
 
 
-def filter_streams(streams: pytube.query.StreamQuery, full_extension: str, do_print: bool) -> pytube.query.StreamQuery:
+def filter_streams(streams: pytube.query.StreamQuery, full_extension: str, do_print: bool,
+                   has_ffmpeg: bool) -> pytube.query.StreamQuery:
 	"""
 	Sorts a list of all streams from a video and returns only needed ones.
 	:param streams: A list all streams of a video
 	:param full_extension: Full name of what to you need - WEBM AUDIO, or mp3
 	:param do_print: print debug info - streams, filter type
+	:param has_ffmpeg: if user has ffmpeg installed, if not - filter streams that would require conversion.
 	:return: Filtered streams with only needed streams
 	"""
 	if do_print:
@@ -183,7 +185,20 @@ def filter_streams(streams: pytube.query.StreamQuery, full_extension: str, do_pr
 		print(*streams.order_by("itag"), "", sep="\n")
 	
 	extension, download_type = filter_extension_type(full_extension)
-	if download_type == "audio":
+	if not has_ffmpeg:
+		if download_type == "video":
+			streams = streams.filter(mime_type=f"{download_type}/{extension}")
+			streams = remove_copies(streams, prioritise_progressive=True)  # There are no copies in audio
+		elif download_type == "audio":
+			streams = streams.filter(mime_type=f"{download_type}/{extension}")
+		elif download_type == "both":
+			streams = streams.filter(progressive=True)
+		
+		if do_print and streams:
+			print("\nResult streams:")
+			print(*streams, sep="\n")
+		return streams
+	elif download_type == "audio":
 		streams = streams.filter(only_audio=True).order_by('abr')  # Only audio remains
 		if do_print:
 			print("\nResult streams:")
@@ -343,8 +358,8 @@ def time_to_secs(time: str) -> int:
 	Time formatted as "hours:minutes:seconds"
 	:return: number of seconds
 	"""
-	h, m, s = (int(i) for i in time.split(':'))
-	seconds = h * 3600 + m * 60 + s
+	h, m, s = time.split(':')
+	seconds = int(h) * 3600 + int(m) * 60 + int(s)
 	return seconds
 
 
@@ -439,3 +454,16 @@ def merge_audio_video(video_path: str, audio_path: str, update_func, do_print: b
 
 def sanitize_playlist_name(name) -> str:
 	return pv_sanitize(name)
+
+
+def check_for_ffmpeg() -> bool:
+	"""
+	Checks if user has ffmpeg, if they don't - program cannot convert videos.
+	:return: If user has ffmpeg.
+	"""
+	
+	try:
+		subprocess.run(["ffmpeg", "-version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		return True
+	except Exception:
+		return False

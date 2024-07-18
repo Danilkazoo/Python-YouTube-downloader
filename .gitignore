@@ -1,4 +1,5 @@
 *.txt
+!exe/readme.txt
 
 # Pyinstaller creates these
 *.manifest

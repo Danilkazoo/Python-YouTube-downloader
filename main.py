@@ -37,6 +37,7 @@ class Main(Tk):
 		self.currently_retrying = False
 		self.downloading_now = 0
 		
+		self.check_ffmpeg = True  # Checking is a beta feature so it may be broken
 		self.init_constants()
 		self.init_settings()
 		self.resizable(False, True)
@@ -85,6 +86,23 @@ class Main(Tk):
 		combostyle.theme_use('combostyle')
 		
 		df = Frame(self, padx=10, pady=10, bg=self.df_frame_background_color, height=800, width=800)
+		
+		# Checks for ffmpeg
+		if self.check_ffmpeg and not slowtube.check_for_ffmpeg():
+			print(slowtube.check_for_ffmpeg())
+			self.ffmpeg_warning_lbl = Label(df,
+			                                text="This program requires ffmpeg for converting files to different formats.\n"
+			                                     "You don't have ffmpeg so this program cannot convert downloaded files.",
+			                                font=self.small_font, bg=self.df_frame_background_color,
+			                                fg=self.disabled_color)
+			self.ffmpeg_warning_lbl.grid(row=3, column=2, columnspan=3, sticky="s")
+			self.possible_extensions = ("webm audio", "webm video", "mp4 audio", "mp4 video", "mp4 both")
+			self.has_ffmpeg = False
+			if self.print_debug:
+				print("\nUser has no ffmpeg\n")
+		else:
+			self.ffmpeg_warning_lbl = Label(df)
+			self.has_ffmpeg = True
 		
 		url_ins_btn = Button(df, text="Insert url", font=(self.main_font, 15), height=2, relief="solid",
 		                     command=lambda: self.url_var.set(self.clipboard_get()), bg=self.df_widgets_bg_col,
@@ -469,7 +487,7 @@ class Main(Tk):
 					return
 			
 			streams = video.streams
-			input_streams = slowtube.filter_streams(streams, video_type, self.print_debug)
+			input_streams = slowtube.filter_streams(streams, video_type, self.print_debug, self.has_ffmpeg)
 			selected_stream = slowtube.quick_select(input_streams, video_quality, video_type,
 			                                        do_print=self.print_debug)
 			
@@ -822,7 +840,7 @@ class Main(Tk):
 				print(f"Success ?\n{video=}\n{error=}")
 				if do_quick:  # If do_quick then just add a video to queue
 					streams = video.streams
-					input_streams = slowtube.filter_streams(streams, quick_type, self.print_debug)
+					input_streams = slowtube.filter_streams(streams, quick_type, self.print_debug, self.has_ffmpeg)
 					selected_stream = slowtube.quick_select(input_streams, quick_qual, quick_type,
 					                                        self.print_debug)
 					
@@ -943,7 +961,7 @@ class Main(Tk):
 				                               foreground=self.disabled_color)
 				return
 			
-			input_streams = slowtube.filter_streams(streams, selected_extension, self.print_debug)
+			input_streams = slowtube.filter_streams(streams, selected_extension, self.print_debug, self.has_ffmpeg)
 			self.understandable_streams = slowtube.streams_to_human(input_streams)
 			self.stream_choice.configure(values=self.understandable_streams)
 			self.streams_var.set(self.understandable_streams[-1])
@@ -952,7 +970,7 @@ class Main(Tk):
 			self.download_button.configure(state="normal", background=self.df_widgets_bg_col,
 			                               foreground=self.df_text_color)
 		else:
-			input_streams = slowtube.filter_streams(streams, quick_type, self.print_debug)
+			input_streams = slowtube.filter_streams(streams, quick_type, self.print_debug, self.has_ffmpeg)
 			selected_stream = slowtube.quick_select(input_streams, quick_qual, quick_type, self.print_debug)
 			
 			if self.print_debug:

@@ -1,6 +1,5 @@
 *.txt
 !exe/readme.txt
-exe/ffmpeg.exe
 
 # Pyinstaller creates these
 *.manifest

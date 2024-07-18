@@ -323,17 +323,17 @@ def quick_select(streams: pytube.query.StreamQuery, quick_quality, quick_type, d
 	return result
 
 
-def get_video(url: str) -> (pytube.YouTube | None, Exception | None):
-	video = pytube.YouTube(url)
-	return check_video(video)
-
-
-def check_video(video: pytube.YouTube) -> (pytube.YouTube | None, Exception | None):
+def get_video(url: str, existing_video: pytube.YouTube = None) -> (pytube.YouTube, Exception):
 	try:
+		if existing_video:
+			video = existing_video
+		else:
+			video = pytube.YouTube(url)
+		
 		trying = video.streams  # I am trying to get video data here, it will make an error if not possible
 		trying = video.initial_data
 		return video, None
-	except pytube.exceptions.RegexMatchError as e:  # This is an error with incorrect url
+	except pytube.exceptions.RegexMatchError as e:
 		return None, None
 	except Exception as e:
 		return None, e

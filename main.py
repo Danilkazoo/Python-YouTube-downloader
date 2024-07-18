@@ -57,6 +57,13 @@ class Main(Tk):
 		self.extension_var.set(self.settings.get('quick_type'))
 		if self.settings['do_quick']:
 			self.streams_var.set(self.settings.get("quick_quality"))
+		
+		def create_dummies(n):
+			for i in range(1, n):
+				self.create_dummy_panel(i, "Test text 1", "Test text 2" * i)
+	
+	# debug_thread = threading.Thread(target=create_dummies, args=(100,))
+	# debug_thread.start()
 	
 	def download_frame_gen(self):
 		"""
@@ -468,13 +475,21 @@ class Main(Tk):
 			for panel_part in all_panel_parts:
 				panel_part.configure(background="#888")  # Just so the user sees that retry button works
 			
-			video, error = slowtube.get_video(video_url, this_video)
+			if this_video:
+				video, error = slowtube.check_video(this_video)
+			else:
+				video, error = slowtube.get_video(video_url)
+			
 			# Cancel retries if there's still no internet connection
 			if video is None:
 				stop_retrying = True
 				if isinstance(error, AttributeError):  # Retry a few times if an error is random
 					for retries in range(3):
-						video, error = slowtube.get_video(video_url, this_video)
+						if this_video:
+							video, error = slowtube.check_video(this_video)
+						else:
+							video, error = slowtube.get_video(video_url)
+						
 						if video:
 							stop_retrying = False
 							break
@@ -516,7 +531,7 @@ class Main(Tk):
 				highlight_color = self.blue_even_highlight
 			else:
 				back_color = self.blue_odd_back
-				text_color = self.blue_ood_text
+				text_color = self.blue_odd_text
 				highlight_color = self.blue_odd_highlight
 		else:
 			if number % 2 == 0:
@@ -617,7 +632,7 @@ class Main(Tk):
 			else:
 				back_color = self.blue_odd_back
 				border_color = self.blue_odd_border
-				text_color = self.blue_ood_text
+				text_color = self.blue_odd_text
 				highlight_color = self.blue_odd_highlight
 				highlight_border = self.blue_odd_highlight_border
 		else:
@@ -1706,7 +1721,7 @@ class Main(Tk):
 						else:
 							panel_back = self.blue_odd_back
 							panel_border = self.blue_odd_border
-							panel_text_color = self.blue_ood_text
+							panel_text_color = self.blue_odd_text
 							panel_highlight_color = self.blue_odd_highlight
 							panel_highlight_border = self.blue_odd_highlight_border
 					else:
@@ -1901,7 +1916,7 @@ class Main(Tk):
 		self.blue_odd_back = "#6189C0"
 		self.blue_odd_border = "#4E73A1"
 		self.blue_odd_highlight_border = "#1111FF"
-		self.blue_ood_text = self.df_text_color
+		self.blue_odd_text = self.df_text_color
 		self.blue_odd_highlight = "#5179B0"
 		
 		self.purple_even_back = "#704192"
@@ -1926,6 +1941,37 @@ class Main(Tk):
 		self.playlist_window_width = 535
 		self.playlist_window_height = 63
 		self.video_panel_height = 73
+	
+	def create_dummy_panel(self, number: int = 1, high_text: str = '', low_text: str = ''):
+		"""
+		A dummy panel just for testing.
+		"""
+		
+		if number % 2:
+			back_color = self.blue_even_back
+			text_color = self.blue_even_text
+		else:
+			back_color = self.blue_odd_back
+			text_color = self.blue_odd_text
+		
+		dummy_panel = Frame(self.panels_frm, background=back_color, height=self.video_panel_height, borderwidth=0)
+		dummy_panel.pack(fill=X)
+		dummy_panel.grid_propagate(False)
+		
+		dummy_high_lbl = Label(dummy_panel, text=high_text, font=(self.main_font, 16, 'bold'), foreground=text_color,
+		                       background=back_color)
+		utils.fit_label_text(dummy_high_lbl, (self.main_font, 'bold'), 16,
+		                     lambda lbl: lbl.winfo_reqwidth() <= dummy_panel.winfo_width())
+		dummy_high_lbl.grid(row=0, column=0, sticky='w')
+		
+		dummy_low_lbl = Label(dummy_panel, text=low_text, font=(self.main_font, 13, 'bold'), foreground=text_color,
+		                      background=back_color)
+		utils.fit_label_text(dummy_low_lbl, (self.main_font, 'bold'), 16,
+		                     lambda lbl: lbl.winfo_reqwidth() <= dummy_panel.winfo_width())
+		dummy_low_lbl.grid(row=1, column=0, sticky='sw')
+		
+		self.panels_frm.update()
+		self.canvas_resize_logic()
 
 
 if __name__ == "__main__":

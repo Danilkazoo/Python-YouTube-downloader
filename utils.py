@@ -114,16 +114,17 @@ def input_clipboard(event, entry: Entry):
 		entry.event_generate("<<Paste>>")  # Not sure if it will 100% work
 
 
-def fit_label_text(lbl: Label, font, starting_font_size, condition):
+def fit_label_text(lbl: Label, font, starting_font_size, condition, min_font_size=1):
 	"""
 	This function will resize the text by decrementing font size until the condition is true.
 	If text cannot fit - it will have the size of 1
 	
 	:param condition: Condition to try, example - lambda lbl: lbl.winfo_reqwidth() <= 450
+	label is always thrown in this condition
 	"""
 	
 	lbl.update_idletasks()
-	for i in range(starting_font_size, 0, -1):
+	for i in range(starting_font_size, min_font_size, -1):
 		lbl.configure(font=(font, i))
 		lbl.update_idletasks()
 		

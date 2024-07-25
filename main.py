@@ -246,15 +246,15 @@ class Main(Tk):
 		# Info about video in queue
 		video_name_lbl = Label(queue_frm, text=video_name, font=(self.main_font, 16, 'bold'), fg=text_color,
 		                       bg=back_color, justify="left")
-		utils.fit_label_text(video_name_lbl, (self.main_font, 'bold'), 16,
-		                     lambda lbl: lbl.winfo_reqwidth() <= queue_frm.winfo_width())
+		utils.fit_widget_text(video_name_lbl, (self.main_font, 'bold'), 16,
+		                      lambda lbl: lbl.winfo_reqwidth() <= queue_frm.winfo_width())
 		video_name_lbl.grid(row=0, column=0, columnspan=4)
 		
 		queue_info = f"{ext_type} - {slowtube.streams_to_human([this_stream])}"
 		queue_info_lbl = Label(queue_frm, text=queue_info, font=(self.main_font, 14, 'bold'), fg=text_color,
 		                       bg=back_color, justify='left')
-		utils.fit_label_text(queue_info_lbl, (self.main_font, 'bold'), 14,
-		                     lambda lbl: lbl.winfo_reqwidth() <= queue_frm.winfo_width())
+		utils.fit_widget_text(queue_info_lbl, (self.main_font, 'bold'), 14,
+		                      lambda lbl: lbl.winfo_reqwidth() <= queue_frm.winfo_width())
 		queue_info_lbl.grid(row=1, column=0, columnspan=4)
 		
 		rem_btn = Button(queue_frm, text="X", font="Arial 20 bold",
@@ -275,7 +275,9 @@ class Main(Tk):
 	def create_error_panel(self, url: str, error: Exception | str, add_retry: bool = False):
 		"""
 		A panel for general errors.
-		If error is internet connection (urlopen error) - it'll have a button to input given url into entry
+		:param url: Inputted url
+		:param error: Error that occurred
+		:param add_retry: This panel will have a retry button that automatically inputs this url
 		"""
 		
 		def on_hover(*event):
@@ -304,9 +306,10 @@ class Main(Tk):
 		error_frm.bind('<Enter>', on_hover)
 		error_frm.bind('<Leave>', out_hover)
 		
-		del_btn = Button(error_frm, text="X", font="Arial 20 bold",
-		                 command=lambda: del_this(error_frm), fg=text_color,
-		                 bg=back_color, relief="flat", height=self.video_panel_height)
+		del_btn = Button(error_frm, text="X", font="Arial 20 bold", fg="black", bg=back_color, relief="flat",
+		                 command=lambda: del_this(error_frm))
+		utils.fit_widget_text(del_btn, (self.main_font, "bold"), 25,
+		                      lambda btn: btn.winfo_reqheight() <= error_frm.winfo_height())
 		del_btn.grid(row=0, column=1, rowspan=2)
 		del_btn.bind("<Enter>", lambda _, w=del_btn: btn_glow(widget=w, enter=True, glow_color="#f88"))
 		del_btn.bind("<Leave>", lambda _, w=del_btn: btn_glow(widget=w, enter=False, back_color=back_color))
@@ -325,24 +328,25 @@ class Main(Tk):
 				self.url_var.set(url)
 				del_this(error_frm)
 			
-			retry_btn = Button(error_frm, text="Retry", font="Arial 18 bold",
-			                   fg=text_color, bg=back_color, relief="flat",
-			                   command=recconnect)
+			retry_btn = Button(error_frm, text="Retry", font="Arial 18 bold", fg=text_color, bg=back_color,
+			                   relief="flat", command=recconnect)
+			utils.fit_widget_text(retry_btn, (self.main_font, "bold"), 25,
+			                      lambda btn: btn.winfo_reqheight() <= error_frm.winfo_height())
 			retry_btn.grid(row=0, column=2, rowspan=2)
 			retry_btn.bind("<Enter>", lambda _, w=retry_btn: btn_glow(widget=w, enter=True, glow_color="#f88"))
 			retry_btn.bind("<Leave>", lambda _, w=retry_btn: btn_glow(widget=w, enter=False, back_color=back_color))
 		
 		error_lbl = Label(error_frm, text=error, font=(self.main_font, 16, 'bold'), fg=text_color,
 		                  bg=back_color, justify="left")
-		utils.fit_label_text(error_lbl, (self.main_font, "bold"), 16,
-		                     lambda lbl: lbl.winfo_reqwidth() <= error_frm.winfo_width() - del_btn.winfo_reqwidth())
+		utils.fit_widget_text(error_lbl, (self.main_font, "bold"), 16,
+		                      lambda lbl: lbl.winfo_reqwidth() <= error_frm.winfo_width() - del_btn.winfo_reqwidth())
 		error_lbl.grid(column=0, row=0, sticky='nw', columnspan=4)
 		
 		url_lbl = Label(error_frm, text=url, font=(self.main_font, 16, 'bold'), fg=text_color,
 		                bg=back_color, justify="left")
-		utils.fit_label_text(url_lbl, (self.main_font, "bold"), 16,
-		                     lambda lbl: lbl.winfo_reqwidth() <= error_frm.winfo_width() - del_btn.winfo_reqwidth())
-		url_lbl.grid(column=0, row=1, sticky='sw', columnspan=4)
+		utils.fit_widget_text(url_lbl, (self.main_font, "bold"), 16,
+		                      lambda lbl: lbl.winfo_reqwidth() <= error_frm.winfo_width() - del_btn.winfo_reqwidth())
+		url_lbl.grid(column=0, row=1, sticky='nw', columnspan=4)
 		
 		right_click_menu = Menu(error_frm, tearoff=0, font=(self.main_font, 12))
 		right_click_menu.add_command(label='Delete', command=lambda: del_this(error_frm))
@@ -432,14 +436,14 @@ class Main(Tk):
 		
 		info_lbl = Label(retry_frm, text=f"{download_type} - {download_quality}", font=(self.main_font, 16, 'bold'),
 		                 fg=text_color, bg=back_color, justify="left")
-		utils.fit_label_text(info_lbl, (self.main_font, "bold"), 16,
-		                     lambda lbl: lbl.winfo_reqwidth() <= retry_frm.winfo_width() - btns_width)
+		utils.fit_widget_text(info_lbl, (self.main_font, "bold"), 16,
+		                      lambda lbl: lbl.winfo_reqwidth() <= retry_frm.winfo_width() - btns_width)
 		info_lbl.grid(column=0, row=0, sticky='nw', columnspan=4)
 		
 		url_lbl = Label(retry_frm, text=url, font=(self.main_font, 16, 'bold'), fg=text_color,
 		                bg=back_color, justify="left")
-		utils.fit_label_text(url_lbl, (self.main_font, "bold"), 16,
-		                     lambda lbl: lbl.winfo_reqwidth() <= retry_frm.winfo_width() - btns_width)
+		utils.fit_widget_text(url_lbl, (self.main_font, "bold"), 16,
+		                      lambda lbl: lbl.winfo_reqwidth() <= retry_frm.winfo_width() - btns_width)
 		url_lbl.grid(column=0, row=1, sticky='sw', columnspan=4)
 		
 		right_click_menu = Menu(retry_frm, tearoff=0, font=(self.main_font, 12))
@@ -557,8 +561,8 @@ class Main(Tk):
 		
 		name = self.video_name
 		dummy_label = Label(text=name, font=(self.main_font, 16, 'bold'))
-		utils.fit_label_text(dummy_label, (self.main_font, 'bold'), 16,
-		                     lambda lbl: lbl.winfo_reqwidth() <= progress_frm.winfo_width())
+		utils.fit_widget_text(dummy_label, (self.main_font, 'bold'), 16,
+		                      lambda lbl: lbl.winfo_reqwidth() <= progress_frm.winfo_width())
 		self.progress_canvas.create_text(20, 25, anchor=W,
 		                                 text=name, font=dummy_label["font"], fill=text_color)
 		
@@ -660,8 +664,8 @@ class Main(Tk):
 		
 		name_lbl = Label(downloaded_frm, text=video_name, font=(self.main_font, 14), foreground=text_color,
 		                 background=back_color, anchor='w')
-		utils.fit_label_text(name_lbl, self.main_font, 14,
-		                     lambda lbl: lbl.winfo_reqwidth() <= downloaded_frm.winfo_width() - 70)
+		utils.fit_widget_text(name_lbl, (self.main_font,), 14,
+		                      lambda lbl: lbl.winfo_reqwidth() <= downloaded_frm.winfo_width() - 70)
 		name_lbl.grid(column=2, row=0, sticky='we', columnspan=4)
 		
 		info_lbl = Label(downloaded_frm,
@@ -740,8 +744,8 @@ class Main(Tk):
 			                                                              download_location, new_title_path))
 			title_lbl = Label(downloaded_frm, text=video_name, font=(self.main_font, 12), foreground=text_color,
 			                  background=back_color, anchor='e')
-			utils.fit_label_text(title_lbl, self.main_font, 12,
-			                     lambda lbl: lbl.winfo_reqwidth() <= 450)
+			utils.fit_widget_text(title_lbl, (self.main_font,), 12,
+			                      lambda lbl: lbl.winfo_reqwidth() <= 450)
 			
 			title_lbl.configure(text=self.video_title)
 		else:
@@ -828,8 +832,15 @@ class Main(Tk):
 		if video:
 			return False
 		
-		if error is None and self.print_debug:
-			print("Incorrect url")
+		if error is None:
+			if self.print_debug:
+				print("Incorrect url")  # right now YouTUbe, again, introduced a new bug here :D
+			
+			if do_quick:  # Retry with current settings when fast download
+				self.create_retry_panel(url, quick_type, quick_qual)
+			else:
+				self.create_error_panel(url, "Incorrect url or YouTube lags, try again later", add_retry=True)
+		
 		
 		# No internet
 		elif isinstance(error, urllib.error.URLError):
@@ -847,12 +858,14 @@ class Main(Tk):
 				print("\nThis is an error that... started randomly occuring in pytube...\n"
 				      "Retry connection 3 times")
 			for retries in range(1, 4):
-				print(f"Attempt {retries}")
+				if self.print_debug:
+					print(f"Attempt {retries}")
 				video, error = slowtube.get_video(url)
 				if not video:
 					continue
 				
-				print(f"Success ?\n{video=}\n{error=}")
+				if self.print_debug:
+					print(f"Success ?\n{video=}\n{error=}")
 				if do_quick:  # If do_quick then just add a video to queue
 					streams = video.streams
 					input_streams = slowtube.filter_streams(streams, quick_type, self.print_debug, self.has_ffmpeg)
@@ -1786,9 +1799,9 @@ class Main(Tk):
 					check_var.trace("w", lambda *event, c=check, cv=check_var: checkbox_fg(check_label=c, checkvar=cv))
 					checkbox_fg(check_label=check, checkvar=check_var)
 					
-					utils.fit_label_text(name_lbl, self.main_font, 13,
-					                     lambda
-						                     lbl: lbl.winfo_reqwidth() <= self.playlist_window_width - preview_size - 50)
+					utils.fit_widget_text(name_lbl, (self.main_font,), 13,
+					                      lambda
+						                      lbl: lbl.winfo_reqwidth() <= self.playlist_window_width - preview_size - 50)
 					
 					if do_preview:
 						parts = (dis_video_frm, name_lbl, info_lbl, preview_lbl, check)
@@ -1960,14 +1973,14 @@ class Main(Tk):
 		
 		dummy_high_lbl = Label(dummy_panel, text=high_text, font=(self.main_font, 16, 'bold'), foreground=text_color,
 		                       background=back_color)
-		utils.fit_label_text(dummy_high_lbl, (self.main_font, 'bold'), 16,
-		                     lambda lbl: lbl.winfo_reqwidth() <= dummy_panel.winfo_width())
+		utils.fit_widget_text(dummy_high_lbl, (self.main_font, 'bold'), 16,
+		                      lambda lbl: lbl.winfo_reqwidth() <= dummy_panel.winfo_width())
 		dummy_high_lbl.grid(row=0, column=0, sticky='w')
 		
 		dummy_low_lbl = Label(dummy_panel, text=low_text, font=(self.main_font, 13, 'bold'), foreground=text_color,
 		                      background=back_color)
-		utils.fit_label_text(dummy_low_lbl, (self.main_font, 'bold'), 16,
-		                     lambda lbl: lbl.winfo_reqwidth() <= dummy_panel.winfo_width())
+		utils.fit_widget_text(dummy_low_lbl, (self.main_font, 'bold'), 16,
+		                      lambda lbl: lbl.winfo_reqwidth() <= dummy_panel.winfo_width())
 		dummy_low_lbl.grid(row=1, column=0, sticky='sw')
 		
 		self.panels_frm.update()

@@ -1,7 +1,7 @@
 import os
 import time
 import shutil
-from tkinter import Widget, Toplevel, Entry, Tk, Label, Menu, Event
+from tkinter import Widget, Toplevel, Entry, Tk, Label, Menu, Event, Button
 
 
 def btn_glow(*event, widget: Widget, enter: bool, back_color="#313131", glow_color="#414141"):
@@ -114,24 +114,34 @@ def input_clipboard(event, entry: Entry):
 		entry.event_generate("<<Paste>>")  # Not sure if it will 100% work
 
 
-def fit_label_text(lbl: Label, font, starting_font_size, condition, min_font_size=1):
+def fit_widget_text(widget: Label | Button, font, starting_font_size, condition, min_font_size=1):
 	"""
 	This function will resize the text by decrementing font size until the condition is true.
-	If text cannot fit - it will have the size of 1
+	If text cannot fit - it will have the size of 1.
+	The widget you send needs to have a font configuration.
 	
+	:param widget: A widget to change (applies automatically)
+	:param font: Font to stay, for example ("Arial", "bold")
+	:param starting_font_size: A maximum font size to consider.
 	:param condition: Condition to try, example - lambda lbl: lbl.winfo_reqwidth() <= 450
 	label is always thrown in this condition
+	:param min_font_size: Minimum font size, default is 1
 	"""
 	
-	lbl.update_idletasks()
+	# Fonts with multiple words must be written without spaces
+	if isinstance(font, str):
+		font = font.split()
+	font, font_details = font[0], font[1:]
+	
+	widget.update_idletasks()
 	for i in range(starting_font_size, min_font_size, -1):
-		lbl.configure(font=(font, i))
-		lbl.update_idletasks()
+		widget.configure(font=(font, i, *font_details))
+		widget.update_idletasks()
 		
-		if condition(lbl):
+		if condition(widget):
 			return
 	
-	lbl.configure(font=(font, 1))
+	widget.configure(font=(font, min_font_size))
 
 
 def calculate_prefix(file_path: str, file_name: str) -> str:

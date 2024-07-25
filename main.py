@@ -620,7 +620,7 @@ class Main(Tk):
 		visual_variant = self.settings.get('visual_theme')
 		self.downloaded_count += 1
 		number = self.downloaded_count
-		do_preview = self.settings.get("download_prewievs")
+		do_preview = self.settings.get("download_previews")
 		video_name = self.video_name
 		this_video = self.video
 		this_url = this_video.watch_url
@@ -1117,13 +1117,13 @@ class Main(Tk):
 			self.settings['do_quick'] = fast_var.get()
 			self.settings['quick_type'] = fast_ext_var.get()
 			self.settings['quick_quality'] = fast_quality_var.get()
-			self.settings['download_prewievs'] = preview_var.get()
+			self.settings['download_previews'] = preview_var.get()
 			self.settings['stop_spamming_playlists'] = playlist_spam_var.get()
 			self.settings['create_new_files'] = create_new_files_var.get()
 			self.settings['choose_title'] = choose_title_var.get()
 			updates = {k: self.settings[k] for k in
 			           ('save_path', 'print', 'visual_theme', 'do_quick', 'quick_type', 'quick_quality',
-			            'download_prewievs', "stop_spamming_playlists",
+			            'download_previews', "stop_spamming_playlists",
 			            "create_new_files", "choose_title")}
 			set_settings(updates)
 			
@@ -1167,7 +1167,7 @@ class Main(Tk):
 			set_settings(downloaded_videos_stats=current_downloaded)
 			
 			unmodded_settings = get_settings(get_all=True)
-			for Bool in ('print', "do_quick", "download_prewievs",
+			for Bool in ('print', "do_quick", "download_previews",
 			             "stop_spamming_playlists", "create_new_files", "choose_title"):
 				unmodded_settings[Bool] = unmodded_settings[Bool] == "True"
 			for Int in ('visual_theme', "downloaded_videos_stats"):
@@ -1186,7 +1186,7 @@ class Main(Tk):
 			fast_var.set(self.settings['do_quick'])
 			fast_ext_var.set(self.settings["quick_type"])
 			fast_quality_var.set(self.settings['quick_quality'])
-			preview_var.set(self.settings['download_prewievs'])
+			preview_var.set(self.settings['download_previews'])
 			playlist_spam_var.set(self.settings['stop_spamming_playlists'])
 			create_new_files_var.set(self.settings['create_new_files'])
 			choose_title_var.set(self.settings['choose_title'])
@@ -1298,8 +1298,8 @@ class Main(Tk):
 		preview_var = BooleanVar()
 		preview_choice = Checkbutton(settings_window, text="Add previews", variable=preview_var, fg=text_color,
 		                             bg=self.df_frame_background_color, font=self.small_font)
-		preview_var.set(self.settings['download_prewievs'])
-		preview_var.trace('w', lambda *event: update_checkbox("download_prewievs", preview_var, preview_choice))
+		preview_var.set(self.settings['download_previews'])
+		preview_var.trace('w', lambda *event: update_checkbox("download_previews", preview_var, preview_choice))
 		preview_choice.grid(row=3, column=6, padx=10, pady=10, sticky='w')
 		
 		playlist_spam_var = BooleanVar()
@@ -1386,7 +1386,7 @@ class Main(Tk):
 			settings = get_settings(get_all=True)
 		
 		# Convert string settings to needed type
-		for Bool in ('print', "do_quick", "download_prewievs", "stop_spamming_playlists",
+		for Bool in ('print', "do_quick", "download_previews", "stop_spamming_playlists",
 		             "create_new_files", "choose_title"):
 			settings[Bool] = (settings[Bool] == "True")
 		for Int in ('visual_theme', "downloaded_videos_stats", "max_window_height"):
@@ -1508,7 +1508,7 @@ class Main(Tk):
 				utils.hide_show(self.lag_warning_lbl, show=True)
 				return
 			except KeyError as error:
-				self.create_error_panel(url, "Youtube personal mixes aren't public playlists, you cannot download them")
+				self.create_error_panel(url, "You cannot download private playlists")
 				self.after_cancel(lag_warning_event)
 				hide_show(self.lag_warning_lbl, show=False)
 				return
@@ -1520,7 +1520,9 @@ class Main(Tk):
 				new_playlist_path = None
 			
 			if self.print_debug:
-				print(f"Downloading all videos from playlist {playlist}\nTo: {new_playlist_path}")
+				print(f"Downloading all videos from playlist {url}"
+				      f"\nPlaylist name: {this_playlist_name}"
+				      f"\nSpecial save path: {new_playlist_path}")
 			
 			for video_url in playlist.url_generator():
 				if self.print_debug:
@@ -1535,7 +1537,7 @@ class Main(Tk):
 			playlist_window.destroy()
 			
 			if self.print_debug:
-				print(f"Downloading all videos from playlist: {url}")
+				print(f"Downloading one video from playlist: {url}")
 			
 			self.create_retry_panel(url, download_type, download_qual)
 			self.retry_requests()
@@ -1560,13 +1562,16 @@ class Main(Tk):
 				if self.print_debug:
 					print("Downloading selected videos from playlist", playlist)
 				
-				for video, do_download in video_choices:
+				for video_index, (video, do_download) in enumerate(video_choices):
 					if not do_download.get():
 						continue
 					
+					video_url = playlist[video_index]
+					
 					if self.print_debug:
 						print("Downloading selected video", video)
-					self.create_retry_panel(url, download_type, download_qual, new_playlist_path, video)
+					
+					self.create_retry_panel(video_url, download_type, download_qual, new_playlist_path, video)
 				
 				playlist_window.destroy()
 				im_references.clear()
@@ -1601,16 +1606,18 @@ class Main(Tk):
 			except urllib.error.URLError as e:
 				self.create_error_panel(url, e, add_retry=True)
 				onclose()
-				utils.hide_show(self.lag_warning_lbl, show=True)
+				hide_show(self.lag_warning_lbl, show=True)
+				playlist_window.destroy()
 				return
 			except KeyError as error:
-				self.create_error_panel(url, "Youtube personal mixes aren't public playlists, you cannot download them")
+				self.create_error_panel(url, "You cannot download private playlists")
 				self.after_cancel(lag_warning_event)
 				hide_show(self.lag_warning_lbl, show=False)
+				playlist_window.destroy()
 				return
 			
 			variant = self.settings.get('visual_theme')
-			do_preview = self.settings.get("download_prewievs")
+			do_preview = self.settings.get("download_previews")
 			im_references = []
 			video_choices = []  # I changed the location of this line just cause someone managed to break the unbreakable
 			
@@ -1648,11 +1655,12 @@ class Main(Tk):
 				Switches all checkboxes from ON to OFF and vice versa.
 				"""
 				nonlocal check_state
-				for video, checkbtn in video_choices:
-					checkbtn.set(not check_state)
-				
 				check_state = not check_state
-				if check_state:
+				
+				for video, checkbtn in video_choices:
+					checkbtn.set(check_state)
+				
+				if not check_state:
 					check_all_btn.configure(fg=self.enabled_color, text="Check all ON")
 				else:
 					check_all_btn.configure(fg=self.disabled_color, text="Check all OFF")
@@ -1716,11 +1724,13 @@ class Main(Tk):
 				nonlocal video_index, video_choices, videos_len
 				for number, video in enumerate(videos[video_index:videos_len], start=video_index + 1):
 					try:
-						print("Trying", video)
+						if self.print_debug:
+							print("Trying", video)
 						video_len = seconds_to_time(video.length)
 						video_name = slowtube.get_real_name(video, self.print_debug)
 					except urllib.error.URLError:
-						print("Error", video)
+						if self.print_debug:
+							print("Error", video)
 						playlist_stop()
 						break
 					
@@ -1799,9 +1809,8 @@ class Main(Tk):
 					check_var.trace("w", lambda *event, c=check, cv=check_var: checkbox_fg(check_label=c, checkvar=cv))
 					checkbox_fg(check_label=check, checkvar=check_var)
 					
-					utils.fit_widget_text(name_lbl, (self.main_font,), 13,
-					                      lambda
-						                      lbl: lbl.winfo_reqwidth() <= self.playlist_window_width - preview_size - 50)
+					utils.fit_widget_text(name_lbl, (self.main_font,), 13, lambda
+						lbl: lbl.winfo_reqwidth() <= self.playlist_window_width - preview_size - 50)
 					
 					if do_preview:
 						parts = (dis_video_frm, name_lbl, info_lbl, preview_lbl, check)
@@ -1817,11 +1826,9 @@ class Main(Tk):
 					video_index += 1
 					playlist_window.update()
 					playlist_canvas_logic()
-				else:  # Using For else is bad, but here it's too convenient
+				else:
 					download_btn.configure(state="normal")
 					check_all_btn.configure(state="normal")
-					print("Else executed")
-				print("Playlist ended")
 			
 			iterate_playlist()
 		

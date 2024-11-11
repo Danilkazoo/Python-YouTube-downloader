@@ -3,11 +3,15 @@ import subprocess
 import threading
 from math import fabs
 
-import pytube
+import pytubefix as pytube
 from pathvalidate import sanitize_filename as pv_sanitize
-from pytube.exceptions import AgeRestrictedError
+from pytubefix.exceptions import AgeRestrictedError
 
 import utils
+
+_convert_files_postfix = "to_convert"
+_video_only_postfix = "only_video_baka"
+_audio_only_postfix = "audio_only_sussy_baka"
 
 
 def convert_to_extension(file_path: str, update_func, final_extension: str, do_print: bool, stream: pytube.Stream) -> (
@@ -25,9 +29,10 @@ def convert_to_extension(file_path: str, update_func, final_extension: str, do_p
 	path, curr_ext = os.path.splitext(file_path)
 	if curr_ext == f".{final_extension}":
 		print("\n\nSomehow I don't need to convert ? Something's broken.\n\n")
-		return file_path
+		return file_path, None
 	
-	path = path[:-10]  # To files that I will convert I add "to_convert"
+	print(_convert_files_postfix, len(_convert_files_postfix), path, path[:-len(_convert_files_postfix)])
+	path = path[:-len(_convert_files_postfix)]  # To files that I will convert I add "to_convert"
 	return_path = f"{path}.{final_extension}"
 	
 	if final_extension == "mp3":
@@ -40,9 +45,10 @@ def convert_to_extension(file_path: str, update_func, final_extension: str, do_p
 	else:
 		print("\n\nIncorrect extensions, go away")  # I'd be scared if that line of code HAS executed
 		print(f"{final_extension = }\n{curr_ext = }\n{return_path = }\n\n")
-		return return_path
+		return return_path, None
 	
 	if do_print:
+		print("Need to convert")
 		print("Resultant cmd:\n", cmd)
 	
 	process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, text=True,
@@ -76,6 +82,9 @@ def get_real_name(video: pytube.YouTube, do_print: bool) -> str:
 	Video objects has a title, but it is not always the same as what a user sees on YouTube.
 	:return: Real title what user sees.
 	"""
+	if do_print:
+		print("\nGetting real video title")
+	
 	d = video.initial_data
 	try:
 		path1 = d['contents']['twoColumnWatchNextResults']['results']["results"]['contents'][0][
@@ -118,7 +127,7 @@ def get_real_name(video: pytube.YouTube, do_print: bool) -> str:
 
 def remove_copies(streams: pytube.query.StreamQuery, prioritise_progressive=False) -> pytube.query.StreamQuery:
 	"""
-	A video can have multiple version of same quality, like, 480p in both .webm and .mp4.
+	A video can have multiple versions of same quality, like, 480p in both .webm and .mp4.
 	:param streams: What streams.
 	:param prioritise_progressive: Progressive streams are .mp4 with audio.
 	:return: Streams without copies, chosen by priorities.
@@ -157,16 +166,19 @@ def filter_extension_type(filter_extension_name: str):
 	:param filter_extension_name: What to filter - for example, WEBM AUDIO, or WEBM VIDEO
 	:return: 2 values:
 	Extension - only type of needed file - webm/mp4/mp3
-	Audio_type - what type are we downlaoding video/audio/both
+	Download_type - what type are we downloading video/audio/both
 	"""
 	
 	if filter_extension_name == "mp3":
-		audio_type = "audio"
+		download_type = "audio"
 		extension = "mp3"
+	elif filter_extension_name == "mp4 audio (.m4a)":
+		download_type = "audio"
+		extension = "m4a"
 	else:
-		extension, audio_type = filter_extension_name.split()
+		extension, download_type = filter_extension_name.split()[:2]
 	
-	return extension, audio_type
+	return extension, download_type
 
 
 def filter_streams(streams: pytube.query.StreamQuery, full_extension: str, do_print: bool,
@@ -223,52 +235,58 @@ def download_video(stream: pytube.streams.Stream, full_path: str, **settings) ->
 	:param stream: What stream to download, it should be already be chosen.
 	:param full_path: Full path where to download, exactly - what file.
 	:param settings: Some settings to download, mainly download_type, print, name and extension
-	:return: Return real path of a downloaded file. And an exception if something happened when when downloading
+	:return: Real path of a downloaded file. And an exception if something happened when downloading.
 	"""
 	
 	save_path = full_path  # It is here to send a real path, not in settings save_path in settings
 	final_extension = settings.get("extension")
 	start_name = settings.get("name")
-	starting_extension = os.path.splitext(stream.get_file_path())[1]
+	starting_extension = os.path.splitext(stream.get_file_path())[1][1:]
+	print_debug = settings.get("print")
+	
+	download_type = settings.get("download_type")
+	need_to_convert =final_extension != starting_extension
 	
 	final_name = pv_sanitize(start_name, replacement_text=' ')
-	prefix_name = final_name  # Only used for prefix, has no additions like "to_convert"
-	if settings.get('download_type') == "both":
-		final_name += "only_video_baka"
-	elif f".{final_extension}" != starting_extension:
-		final_name += "to_convert"
 	
 	# Adding numbers to a file's name, so it doesn't overlap with existing ones
-	prefix = utils.calculate_prefix(file_path=save_path, file_name=f"{prefix_name}.{final_extension}")
+	prefix = utils.calculate_prefix(file_path=save_path, file_name=f"{final_name}.{final_extension}")
 	
-	if settings.get("print"):
+	# Adding post-fixes
+	if download_type == "both":
+		final_name += _video_only_postfix
+	elif need_to_convert:
+		final_name += _convert_files_postfix
+	
+	if print_debug:
 		print(f"\n\nDownloading {streams_to_human([stream])[0]} = {stream}")
-		print("To:", os.path.join(save_path, f"{prefix}{final_name}.{final_extension}"))
-		print(f"Download extension: {settings.get('extension')}"
-		      f"Download type: {settings.get('download_type')}")
+		print("To:", os.path.join(save_path, f"{prefix}{final_name}.{starting_extension}"))
+		print(f"Starting extension: {starting_extension}\n"
+		      f"Final extension: {final_extension}\n"
+		      f"Download type: {download_type}")
 		print(f"Settings: {settings}")
 	
 	try:
 		real_path = stream.download(output_path=save_path, filename_prefix=prefix,
-		                            filename=f"{final_name}{starting_extension}")
+		                            filename=f"{final_name}")
 	except Exception as error:
-		real_path = os.path.join(save_path, f"{prefix}{final_name}{starting_extension}")
+		real_path = os.path.join(save_path, f"{prefix}{final_name}")
 		return real_path, error
 	
-	if real_path != fr"{save_path}\{prefix}{final_name}{starting_extension}":
-		print("Perhaps file name has some symbols that windows doesn't like")
-		print(fr"Was : {save_path}\{prefix}{start_name}{starting_extension}")
+	if real_path != os.path.join(save_path, f"{prefix}{final_name}.{starting_extension}") and print_debug:
+		print(fr"Was : {os.path.join(save_path, f'{prefix}{final_name}.{starting_extension}')}")
 		print(r"Real:", real_path)
 	
-	if settings.get('download_type') == "both":
-		real_path, error = merge_audio_video(real_path, settings.get("audio_path"), settings.get("update_func"),
-		                                     settings.get("print"), final_extension)
-	elif f".{final_extension}" != starting_extension:
+	if download_type == "both":
+		real_path, error = merge_audio_video(video_path=real_path, audio_path=settings.get("audio_path"),
+		                                     update_func=settings.get("update_func"), do_print=settings.get("print"),
+		                                     result_file_format=final_extension)
+	elif need_to_convert:
 		real_path, error = convert_to_extension(file_path=real_path, update_func=settings.get("update_func"),
 		                                        final_extension=final_extension, do_print=settings.get("print"),
 		                                        stream=stream)
 	else:
-		if settings.get("print"):
+		if print_debug:
 			print(f"Already downloaded right video file\npath = {real_path}")
 		error = None
 	
@@ -410,7 +428,9 @@ def merge_audio_video(video_path: str, audio_path: str, update_func, do_print: b
 	:return: Path of a final file, Error if it has occurred.
 	"""
 	path, curr_ext = os.path.splitext(video_path)
-	path = path[:-15]  # 15 is len of (audio_only_sussy_baka) I add to differentiate merge files
+	print(1729483742901834, path[:-15], len(_audio_only_postfix), path[:-len(_audio_only_postfix)])
+	path = path[:-len(_audio_only_postfix)]  # 15 is len of (audio_only_sussy_baka) I add to differentiate merge files
+	print(path)
 	final_path = f"{path}.{result_file_format}"
 	
 	# mp4 to webm is special in it's blasphemy, it is a lot harder to convert, and needs additional ffmpeg "submodule"

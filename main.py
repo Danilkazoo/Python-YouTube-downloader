@@ -8,7 +8,8 @@ from collections import deque
 from io import BytesIO
 from tkinter import *
 
-import pytube
+import pytubefix
+import pytubefix.exceptions
 import requests
 from PIL import ImageTk, Image
 from pathvalidate import sanitize_filename as pv_sanitize
@@ -88,22 +89,21 @@ class Main(Tk):
 			              'fieldforeground': self.df_text_color, 'foreground': self.df_text_color}},
 			'TCheckbutton': {
 				'configure': {'foreground': self.df_text_color, 'background': self.df_frame_background_color,
-				              'font': (self.main_font, 14)}}
-		})
+				              'font': (self.main_font, 14)}}}
+		                        )
 		combostyle.theme_use('combostyle')
 		
 		df = Frame(self, padx=10, pady=10, bg=self.df_frame_background_color, height=800, width=800)
 		
 		# Checks for ffmpeg
 		if self.check_ffmpeg and not slowtube.check_for_ffmpeg():
-			print(slowtube.check_for_ffmpeg())
 			self.ffmpeg_warning_lbl = Label(df,
 			                                text="This program requires ffmpeg for converting files to different formats.\n"
 			                                     "You don't have ffmpeg so this program cannot convert downloaded files.",
 			                                font=self.small_font, bg=self.df_frame_background_color,
 			                                fg=self.disabled_color)
 			self.ffmpeg_warning_lbl.grid(row=3, column=2, columnspan=3, sticky="s")
-			self.possible_extensions = ("webm audio", "webm video", "mp4 audio", "mp4 video", "mp4 both")
+			self.possible_extensions = ("webm audio", "webm video", "mp4 audio (.m4a)", "mp4 video", "mp4 both")
 			self.has_ffmpeg = False
 			if self.print_debug:
 				print("\nUser has no ffmpeg\n")
@@ -129,7 +129,6 @@ class Main(Tk):
 		self.lag_warning_lbl.grid(row=1, column=2, columnspan=3, sticky="n")
 		hide_show(self.lag_warning_lbl, show=False)
 		
-		# This lambda is an abomination, so, it just tries to download next video from a queue, AND hides this button
 		self.download_retry_btn = Button(df, text="Retry download", font=self.small_font,
 		                                 bg=self.df_widgets_bg_col, fg=self.disabled_color, relief='solid',
 		                                 command=retry_download)
@@ -295,7 +294,7 @@ class Main(Tk):
 			self.clipboard_clear()
 			self.clipboard_append(url)
 		
-		error = str(error)
+		str_error = str(error)
 		back_color = self.disabled_color
 		text_color = "black"
 		
@@ -315,12 +314,13 @@ class Main(Tk):
 		del_btn.bind("<Leave>", lambda _, w=del_btn: btn_glow(widget=w, enter=False, back_color=back_color))
 		
 		retry_btn = Button()  # I create a dummy, will change it if reconnect is needed
-		if error == "<urlopen error [Errno 11001] getaddrinfo failed>":
-			error = "Couldn't get response from url"
-		elif "age restricted" in error:
-			error = "Video is age restricted, and can't be accessed without logging in... probably"
+		
+		if "urlopen" in str_error:
+			str_error = "Couldn't get response from url"
+		elif "age restricted" in str_error:
+			str_error = "Video is age restricted, and can't be accessed without logging in... probably"
 		elif self.print_debug:
-			print(error)
+			print(str_error)
 		
 		if add_retry:
 			def recconnect():
@@ -336,7 +336,7 @@ class Main(Tk):
 			retry_btn.bind("<Enter>", lambda _, w=retry_btn: btn_glow(widget=w, enter=True, glow_color="#f88"))
 			retry_btn.bind("<Leave>", lambda _, w=retry_btn: btn_glow(widget=w, enter=False, back_color=back_color))
 		
-		error_lbl = Label(error_frm, text=error, font=(self.main_font, 16, 'bold'), fg=text_color,
+		error_lbl = Label(error_frm, text=str_error, font=(self.main_font, 16, 'bold'), fg=text_color,
 		                  bg=back_color, justify="left")
 		utils.fit_widget_text(error_lbl, (self.main_font, "bold"), 16,
 		                      lambda lbl: lbl.winfo_reqwidth() <= error_frm.winfo_width() - del_btn.winfo_reqwidth())
@@ -596,7 +596,7 @@ class Main(Tk):
 		self.progress_canvas.itemconfigure(2, text=f"{percent:.2f}%")
 		self.progress_canvas.update()
 	
-	def progress_panel_downloading(self, stream: pytube.streams.Stream, bytes: bytes, remaining: int):
+	def progress_panel_downloading(self, stream: pytubefix.streams.Stream, bytes: bytes, remaining: int):
 		percent = 100 - (remaining / stream.filesize) * 100
 		
 		will_convert = self.settings.get("extension") != stream.subtype
@@ -834,13 +834,12 @@ class Main(Tk):
 		
 		if error is None:
 			if self.print_debug:
-				print("Incorrect url")  # right now YouTUbe, again, introduced a new bug here :D
+				print("Incorrect url")  # right now YouTube, again, introduced a new bug here :D
 			
 			if do_quick:  # Retry with current settings when fast download
 				self.create_retry_panel(url, quick_type, quick_qual)
 			else:
 				self.create_error_panel(url, "Incorrect url or YouTube lags, try again later", add_retry=True)
-		
 		
 		# No internet
 		elif isinstance(error, urllib.error.URLError):
@@ -1010,18 +1009,15 @@ class Main(Tk):
 	def download_selected(self, stream):
 		def retry_later():  # User had no internet when downloading
 			self.delete_progress_panel()
-			this_video_panel.destroy()
 			self.add_to_download_queue(download_stream=stream, download_type_name=self.full_video_type_name,
 			                           input_video=self.video, this_playlist_path=self.this_playlist_save_path,
 			                           auto_download_next=False, this_video_panel=this_video_panel)
-			self.downloading_now -= 1
 			hide_show(self.download_retry_btn, show=True)
 			self.update()
 		
 		def stop_downloading():  # Called when user decides to stop the download / converting
 			self.delete_progress_panel()
 			this_video_panel.destroy()
-			self.downloading_now -= 1
 			self.update()
 		
 		video_name = self.video_name
@@ -1039,7 +1035,7 @@ class Main(Tk):
 		else:
 			save_path = self.settings.get("save_path")
 		
-		# If we need audio and we have only video - download purely audio and merge with video
+		# If we need audio and we have only video - download purely audio and merge with video later
 		if self.settings.get("download_type") == "both":
 			audio_stream = self.video.streams.filter(only_audio=True).order_by('abr').last()
 			self.downloading_audio_file = True
@@ -1083,6 +1079,11 @@ class Main(Tk):
 			self.create_downloaded_panel(downloaded_path, downloaded_stream=stream, this_video_panel=this_video_panel)
 			return
 		
+		self.downloading_now -= 1
+		
+		if self.print_debug:
+			print("\nERROR:")
+		
 		if isinstance(error, utils.StopDownloading):
 			if self.print_debug:
 				print("User decided to stop downloading on a final file")
@@ -1091,10 +1092,14 @@ class Main(Tk):
 			if self.print_debug:
 				print("User failed to download a file, likely no connection")
 			retry_later()
+		elif isinstance(error, pytubefix.exceptions.MaxRetriesExceeded):
+			if self.print_debug:
+				print("Download halted in the middle, internet connection isn't stable")
+			retry_later()
 		else:
 			if self.print_debug:
 				print("Something unexpected happened")
-				print(error)
+				print(f"{error = }")
 			retry_later()
 		
 		# Delete created audio and video files
@@ -1433,6 +1438,9 @@ class Main(Tk):
 			download_type_name = self.extension_var.get()
 		if input_video is None:
 			input_video = self.input_video
+		
+		if self.print_debug:
+			print(f"\nAdding video to queue\n{download_stream = }\n{download_type_name = }\n{input_video = }")
 		
 		video_name = slowtube.get_real_name(input_video, do_print=self.print_debug)
 		if video_name is None:
@@ -1952,8 +1960,7 @@ class Main(Tk):
 		
 		self.preview_size = 58
 		self.possible_extensions = ("mp3", "webm audio", "webm video", "webm both",
-		                            "mp4 audio", "mp4 video", "mp4 both")
-		#  Just "mp4" has both audio and video tracks, I'll need to rename it
+		                            "mp4 audio (.m4a)", "mp4 video", "mp4 both")
 		self.possible_audio_quality = ("48kbps", "50kbps", "70kbps", "128kbps", "160kbps")
 		self.possible_video_quality = ("144p", "240p", "360p", "480p", "720p", "1080p", "1440p", "2160p")
 		self.main_font = "Comic Sans MS"

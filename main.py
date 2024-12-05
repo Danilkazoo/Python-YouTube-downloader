@@ -58,10 +58,10 @@ class Main(Tk):
 		self.extension_var.set(self.settings.get('quick_type'))
 		if self.settings['do_quick']:
 			self.streams_var.set(self.settings.get("quick_quality"))
-		
-		def create_dummies(n):
-			for i in range(1, n):
-				self.create_dummy_panel(i, "Test text 1", "Test text 2" * i)
+	
+	# def create_dummies(n):
+	# 	for i in range(1, n):
+	# 		self.create_dummy_panel(i, "Test text 1", "Test text 2" * i)
 	
 	# debug_thread = threading.Thread(target=create_dummies, args=(100,))
 	# debug_thread.start()
@@ -1008,14 +1008,17 @@ class Main(Tk):
 	
 	def download_selected(self, stream):
 		def retry_later():  # User had no internet when downloading
+			self.downloading_now -= 1
 			self.delete_progress_panel()
 			self.add_to_download_queue(download_stream=stream, download_type_name=self.full_video_type_name,
 			                           input_video=self.video, this_playlist_path=self.this_playlist_save_path,
-			                           auto_download_next=False, this_video_panel=this_video_panel)
+			                           auto_download_next=False, this_video_panel=this_video_panel,
+			                           video_name=video_name)
 			hide_show(self.download_retry_btn, show=True)
 			self.update()
 		
 		def stop_downloading():  # Called when user decides to stop the download / converting
+			self.downloading_now -= 1
 			self.delete_progress_panel()
 			this_video_panel.destroy()
 			self.update()
@@ -1079,10 +1082,8 @@ class Main(Tk):
 			self.create_downloaded_panel(downloaded_path, downloaded_stream=stream, this_video_panel=this_video_panel)
 			return
 		
-		self.downloading_now -= 1
-		
 		if self.print_debug:
-			print("\nERROR:")
+			print(f"\nERROR:\n{error}")
 		
 		if isinstance(error, utils.StopDownloading):
 			if self.print_debug:
@@ -1099,7 +1100,6 @@ class Main(Tk):
 		else:
 			if self.print_debug:
 				print("Something unexpected happened")
-				print(f"{error = }")
 			retry_later()
 		
 		# Delete created audio and video files
@@ -1419,7 +1419,8 @@ class Main(Tk):
 	
 	# Add video stream to download to queue
 	def add_to_download_queue(self, download_stream=None, download_type_name=None, input_video=None,
-	                          this_playlist_path=None, auto_download_next=True, this_video_panel=None):
+	                          this_playlist_path=None, auto_download_next=True, this_video_panel=None,
+	                          video_name=None):
 		"""
 		This is a function that handles all new videos to be downloaded.
 		
@@ -1430,6 +1431,7 @@ class Main(Tk):
 		:param this_playlist_path: Inputted when playlist creates a new save location - new file for this exact playlist.
 		:param auto_download_next: Should function download_next be called.
 		:param this_video_panel: Every video has it's own panel, usually they are created in queue, if not - send them here.
+		:param video_name: When you get a new video, it should find real video name, but if it already was found - reuse.
 		"""
 		if download_stream is None:
 			if not self.input_streams:
@@ -1442,7 +1444,9 @@ class Main(Tk):
 		if self.print_debug:
 			print(f"\nAdding video to queue\n{download_stream = }\n{download_type_name = }\n{input_video = }")
 		
-		video_name = slowtube.get_real_name(input_video, do_print=self.print_debug)
+		if video_name is None:
+			video_name = slowtube.get_real_name(input_video, do_print=self.print_debug)
+		
 		if video_name is None:
 			video_name = input_video.title
 		elif input_video.title != video_name and self.print_debug:

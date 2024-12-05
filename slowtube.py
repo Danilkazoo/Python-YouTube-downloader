@@ -27,11 +27,12 @@ def convert_to_extension(file_path: str, update_func, final_extension: str, do_p
 	"""
 	
 	path, curr_ext = os.path.splitext(file_path)
-	if curr_ext == f".{final_extension}":
+	if curr_ext == final_extension:
 		print("\n\nSomehow I don't need to convert ? Something's broken.\n\n")
 		return file_path, None
 	
-	print(_convert_files_postfix, len(_convert_files_postfix), path, path[:-len(_convert_files_postfix)])
+	print(_convert_files_postfix, len(_convert_files_postfix), path,
+	      path[:-len(_convert_files_postfix)], curr_ext, final_extension)  # todo: remove
 	path = path[:-len(_convert_files_postfix)]  # To files that I will convert I add "to_convert"
 	return_path = f"{path}.{final_extension}"
 	
@@ -245,7 +246,7 @@ def download_video(stream: pytube.streams.Stream, full_path: str, **settings) ->
 	print_debug = settings.get("print")
 	
 	download_type = settings.get("download_type")
-	need_to_convert =final_extension != starting_extension
+	need_to_convert = final_extension != starting_extension
 	
 	final_name = pv_sanitize(start_name, replacement_text=' ')
 	
@@ -261,9 +262,9 @@ def download_video(stream: pytube.streams.Stream, full_path: str, **settings) ->
 	if print_debug:
 		print(f"\n\nDownloading {streams_to_human([stream])[0]} = {stream}")
 		print("To:", os.path.join(save_path, f"{prefix}{final_name}.{starting_extension}"))
-		print(f"Starting extension: {starting_extension}\n"
-		      f"Final extension: {final_extension}\n"
-		      f"Download type: {download_type}")
+		print(f"Starting extension: {starting_extension}")
+		print(f"Final extension: {final_extension}")
+		print(f"Download type: {download_type}\n{need_to_convert = }")
 		print(f"Settings: {settings}")
 	
 	try:
@@ -428,7 +429,7 @@ def merge_audio_video(video_path: str, audio_path: str, update_func, do_print: b
 	:return: Path of a final file, Error if it has occurred.
 	"""
 	path, curr_ext = os.path.splitext(video_path)
-	print(1729483742901834, path[:-15], len(_audio_only_postfix), path[:-len(_audio_only_postfix)])
+	print(1729483742901834, path[:-15], len(_audio_only_postfix), path[:-len(_audio_only_postfix)])  # todo: remove
 	path = path[:-len(_audio_only_postfix)]  # 15 is len of (audio_only_sussy_baka) I add to differentiate merge files
 	print(path)
 	final_path = f"{path}.{result_file_format}"

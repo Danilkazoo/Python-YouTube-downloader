@@ -269,9 +269,9 @@ def download_video(stream: pytube.streams.Stream, full_path: str, **settings) ->
 	
 	try:
 		real_path = stream.download(output_path=save_path, filename_prefix=prefix,
-		                            filename=f"{final_name}")
+		                            filename=f"{final_name}.{starting_extension}")
 	except Exception as error:
-		real_path = os.path.join(save_path, f"{prefix}{final_name}")
+		real_path = os.path.join(save_path, f"{prefix}{final_name}.{starting_extension}")
 		return real_path, error
 	
 	if real_path != os.path.join(save_path, f"{prefix}{final_name}.{starting_extension}") and print_debug:

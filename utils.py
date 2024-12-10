@@ -1,6 +1,6 @@
 import os
-import time
 import shutil
+import time
 from tkinter import Widget, Toplevel, Entry, Tk, Label, Menu, Event, Button
 
 
@@ -30,11 +30,14 @@ def seconds_to_time(seconds: int) -> str:
 	prev_was = False
 	for i in (days, hours, minutes, seconds):
 		if prev_was or i > 0:
-			if i < 10 and prev_was:
+			if i < 10:
 				final_string.append(f"0{i}")
 			else:
 				final_string.append(str(i))
 			prev_was = True
+	
+	if len(final_string) == 1:
+		return "0:" + final_string[0]
 	
 	return ':'.join(final_string)
 

@@ -487,7 +487,7 @@ class Main(Tk):
 			# Cancel retries if there's still no internet connection
 			if video is None:
 				stop_retrying = True
-				if isinstance(error, AttributeError):  # Retry a few times if an error is random
+				if isinstance(error, AttributeError):  # Retry a few times for this error (this error is random)
 					for retries in range(3):
 						if this_video:
 							video, error = slowtube.check_video(this_video)
@@ -677,10 +677,10 @@ class Main(Tk):
 		
 		# Interactions behaviour
 		def del_command(path, del_image, dis_frame, this_video_frm):
-			if not os.path.exists(path) and self.print_debug:
-				print("Good attempt to delete nonexistent file")
-			else:
+			if os.path.exists(path):
 				os.remove(path)
+			elif self.print_debug:
+				print("Good attempt to delete nonexistent file")
 			
 			if del_image:
 				self.preview_images.remove(del_image)

@@ -349,10 +349,11 @@ def get_video(url: str) -> (pytube.YouTube | None, Exception | None):
 
 def check_video(video: pytube.YouTube) -> (pytube.YouTube | None, Exception | None):
 	try:
-		trying = video.streams  # I am trying to get video data here, it will make an error if not possible
-		trying = video.initial_data
+		_ = video.streams  # I am trying to get video data here, it will make an error if not possible
+		_ = video.initial_data
+		_ = video.vid_info
 		return video, None
-	except pytube.exceptions.RegexMatchError as e:  # This is an error with incorrect url
+	except pytube.exceptions.RegexMatchError as e:  # Incorrect url
 		return None, None
 	except Exception as e:
 		return None, e
@@ -398,7 +399,6 @@ def get_url_type(url: str) -> int:
 	
 	# If it isn't youtube
 	if len(parts) < 3 or ("youtube" not in parts[2] and "youtu.be" not in parts[2]):
-		# Return 1 as a normal video if something is broken, return 0 if this is not a video
 		return 0
 	
 	# If it is a playlist
@@ -412,7 +412,7 @@ def get_url_type(url: str) -> int:
 
 def get_playlist(url: str) -> pytube.Playlist:
 	playlist = pytube.Playlist(url)
-	trying = playlist.title
+	_ = playlist.title
 	return playlist
 
 
@@ -486,5 +486,5 @@ def check_for_ffmpeg() -> bool:
 	try:
 		subprocess.run(["ffmpeg", "-version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		return True
-	except Exception:
+	except Exception as e:
 		return False
